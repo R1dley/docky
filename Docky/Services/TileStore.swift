@@ -65,6 +65,10 @@ final class TileStore: ObservableObject {
         rebuildTiles()
     }
 
+    func isPinnedReorderable(tileID: String) -> Bool {
+        pinnedTiles.contains { $0.id == tileID }
+    }
+
     private static let finderBundleID = "com.apple.finder"
 
     private func rebuildTiles() {

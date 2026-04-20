@@ -60,6 +60,44 @@ final class DockEditorService {
         return true
     }
 
+    @discardableResult
+    func setPinnedItemOrder(ids: [String]) -> Bool {
+        guard !ids.isEmpty else {
+            return false
+        }
+
+        let updated = updateDockPlist { plist in
+            guard let apps = plist["persistent-apps"] as? [[String: Any]],
+                  apps.count == ids.count else {
+                return false
+            }
+
+            let appsByID = Dictionary(uniqueKeysWithValues: apps.compactMap { entry in
+                pinnedItemID(in: entry).map { ($0, entry) }
+            })
+
+            guard appsByID.count == apps.count else {
+                return false
+            }
+
+            let orderedApps = ids.compactMap { appsByID[$0] }
+            guard orderedApps.count == apps.count else {
+                return false
+            }
+
+            plist["persistent-apps"] = orderedApps
+            return true
+        }
+
+        guard updated else {
+            return false
+        }
+
+        restartDock()
+        TileStore.shared.refresh()
+        return true
+    }
+
     private func updateDockPlist(_ mutate: (inout [String: Any]) -> Bool) -> Bool {
         let url = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Preferences")
@@ -118,6 +156,10 @@ final class DockEditorService {
 
         return (tileData?["bundle-identifier"] as? String)
             ?? url.flatMap { Bundle(url: $0)?.bundleIdentifier }
+    }
+
+    private func pinnedItemID(in entry: [String: Any]) -> String? {
+        (entry["GUID"] as? NSNumber)?.stringValue
     }
 
     private func makePinnedAppEntry(bundleIdentifier: String, plist: [String: Any]) -> [String: Any]? {
