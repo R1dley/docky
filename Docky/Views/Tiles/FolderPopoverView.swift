@@ -11,6 +11,7 @@ struct FolderPopoverView: View {
     let tile: FolderTile
     let initialSnapshot: FolderContentsSnapshot
     @Binding var isPresented: Bool
+    let onPopoverSizeChange: (CGSize) -> Void
 
     @ObservedObject private var permissions = PermissionsService.shared
     @State private var currentEntry: FolderPopoverEntry
@@ -27,10 +28,16 @@ struct FolderPopoverView: View {
     private let maxGridHeight: CGFloat = 840
     private let headerHeight: CGFloat = 38
 
-    init(tile: FolderTile, initialSnapshot: FolderContentsSnapshot, isPresented: Binding<Bool>) {
+    init(
+        tile: FolderTile,
+        initialSnapshot: FolderContentsSnapshot,
+        isPresented: Binding<Bool>,
+        onPopoverSizeChange: @escaping (CGSize) -> Void = { _ in }
+    ) {
         self.tile = tile
         self.initialSnapshot = initialSnapshot
         _isPresented = isPresented
+        self.onPopoverSizeChange = onPopoverSizeChange
         let rootEntry = FolderPopoverEntry(
             url: tile.url,
             displayName: tile.displayName,
@@ -47,6 +54,7 @@ struct FolderPopoverView: View {
                 currentEntry = refreshedEntry(for: currentEntry)
                 backHistory = backHistory.map(refreshedEntry(for:))
                 selectDefaultItemIfNeeded()
+                reportPopoverSize()
             }
             .background(.ultraThinMaterial)
             .background {
@@ -56,6 +64,10 @@ struct FolderPopoverView: View {
             }
             .onAppear {
                 selectDefaultItemIfNeeded()
+                reportPopoverSize()
+            }
+            .onChange(of: popoverSize) { _, _ in
+                reportPopoverSize()
             }
     }
 
@@ -251,6 +263,10 @@ struct FolderPopoverView: View {
         return min(max(totalHeight, minGridHeight), maxGridHeight)
     }
 
+    private var popoverSize: CGSize {
+        CGSize(width: popoverWidth, height: popoverHeight)
+    }
+
     private var reloadKey: String {
         "\(tile.url.path)|\(permissions.userFolders)|\(isPresented)"
     }
@@ -354,6 +370,10 @@ struct FolderPopoverView: View {
             displayName: entry.displayName,
             snapshot: FolderAccessService.shared.snapshot(of: entry.url)
         )
+    }
+
+    private func reportPopoverSize() {
+        onPopoverSizeChange(popoverSize)
     }
 }
 

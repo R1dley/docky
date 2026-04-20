@@ -105,17 +105,13 @@ struct TileView: View {
                     )
                     .allowsHitTesting(false)
                 }
-            }
-            .popover(
-                isPresented: $isFolderPopoverPresented,
-                attachmentAnchor: folderPopoverAttachmentAnchor,
-                arrowEdge: folderPopoverArrowEdge
-            ) {
+
                 if case .folder(let folder) = tile.content {
-                    FolderPopoverView(
+                    FolderPopoverPresenter(
                         tile: folder,
                         initialSnapshot: folderSnapshot,
-                        isPresented: $isFolderPopoverPresented
+                        isPresented: $isFolderPopoverPresented,
+                        preferredEdge: inwardPopoverEdge
                     )
                 }
             }
@@ -162,32 +158,6 @@ struct TileView: View {
     }
 
     private var runningIndicatorEdge: Edge.Set {
-        switch position {
-        case .top:
-            .top
-        case .left:
-            .leading
-        case .right:
-            .trailing
-        case .bottom:
-            .bottom
-        }
-    }
-
-    private var folderPopoverAttachmentAnchor: PopoverAttachmentAnchor {
-        switch position {
-        case .top:
-            .point(.bottom)
-        case .left:
-            .point(.trailing)
-        case .right:
-            .point(.leading)
-        case .bottom:
-            .point(.top)
-        }
-    }
-
-    private var folderPopoverArrowEdge: Edge {
         switch position {
         case .top:
             .top
@@ -463,6 +433,144 @@ private struct TileTooltipPopoverPresenter: NSViewRepresentable {
 }
 
 private final class TooltipAnchorView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+}
+
+private struct FolderPopoverPresenter: NSViewRepresentable {
+    let tile: FolderTile
+    let initialSnapshot: FolderContentsSnapshot
+    @Binding var isPresented: Bool
+    let preferredEdge: NSRectEdge
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            tile: tile,
+            initialSnapshot: initialSnapshot,
+            isPresented: $isPresented,
+            preferredEdge: preferredEdge
+        )
+    }
+
+    func makeNSView(context: Context) -> FolderPopoverAnchorView {
+        FolderPopoverAnchorView()
+    }
+
+    func updateNSView(_ nsView: FolderPopoverAnchorView, context: Context) {
+        context.coordinator.update(
+            tile: tile,
+            initialSnapshot: initialSnapshot,
+            isPresented: $isPresented,
+            preferredEdge: preferredEdge
+        )
+
+        if isPresented {
+            context.coordinator.show(relativeTo: nsView)
+        } else {
+            context.coordinator.close()
+        }
+    }
+
+    static func dismantleNSView(_ nsView: FolderPopoverAnchorView, coordinator: Coordinator) {
+        coordinator.close()
+    }
+
+    final class Coordinator: NSObject, NSPopoverDelegate {
+        private let popover = NSPopover()
+        private let hostingController = NSHostingController(
+            rootView: FolderPopoverView(
+                tile: FolderTile(url: URL(fileURLWithPath: "/"), displayName: ""),
+                initialSnapshot: .loaded([]),
+                isPresented: .constant(false)
+            )
+        )
+        private var isPresented: Binding<Bool>
+        private var preferredEdge: NSRectEdge
+        private var lastContentSize = NSSize(width: 320, height: 240)
+
+        init(
+            tile: FolderTile,
+            initialSnapshot: FolderContentsSnapshot,
+            isPresented: Binding<Bool>,
+            preferredEdge: NSRectEdge
+        ) {
+            self.isPresented = isPresented
+            self.preferredEdge = preferredEdge
+            super.init()
+            popover.contentViewController = hostingController
+            popover.animates = true
+            popover.behavior = .transient
+            popover.delegate = self
+            update(
+                tile: tile,
+                initialSnapshot: initialSnapshot,
+                isPresented: isPresented,
+                preferredEdge: preferredEdge
+            )
+        }
+
+        func update(
+            tile: FolderTile,
+            initialSnapshot: FolderContentsSnapshot,
+            isPresented: Binding<Bool>,
+            preferredEdge: NSRectEdge
+        ) {
+            self.isPresented = isPresented
+            self.preferredEdge = preferredEdge
+            hostingController.rootView = FolderPopoverView(
+                tile: tile,
+                initialSnapshot: initialSnapshot,
+                isPresented: isPresented,
+                onPopoverSizeChange: { [weak self] size in
+                    self?.updateContentSize(size)
+                }
+            )
+        }
+
+        func show(relativeTo view: NSView) {
+            guard view.window != nil, !popover.isShown else { return }
+            updateContentSize(lastContentSize)
+            popover.show(relativeTo: anchorRect(in: view.bounds), of: view, preferredEdge: preferredEdge)
+        }
+
+        func close() {
+            popover.performClose(nil)
+        }
+
+        func popoverDidClose(_ notification: Notification) {
+            guard isPresented.wrappedValue else { return }
+            DispatchQueue.main.async { [isPresented] in
+                isPresented.wrappedValue = false
+            }
+        }
+
+        private func updateContentSize(_ size: CGSize) {
+            let contentSize = NSSize(width: size.width, height: size.height)
+            guard contentSize.width > 0, contentSize.height > 0 else { return }
+            lastContentSize = contentSize
+            hostingController.preferredContentSize = contentSize
+            popover.contentSize = contentSize
+        }
+
+        private func anchorRect(in bounds: NSRect) -> NSRect {
+            switch preferredEdge {
+            case .minX:
+                NSRect(x: bounds.minX, y: bounds.midY - 0.5, width: 1, height: 1)
+            case .maxX:
+                NSRect(x: bounds.maxX - 1, y: bounds.midY - 0.5, width: 1, height: 1)
+            case .minY:
+                NSRect(x: bounds.midX - 0.5, y: bounds.minY, width: 1, height: 1)
+            case .maxY:
+                NSRect(x: bounds.midX - 0.5, y: bounds.maxY - 1, width: 1, height: 1)
+            @unknown default:
+                NSRect(x: bounds.midX - 0.5, y: bounds.maxY - 1, width: 1, height: 1)
+            }
+        }
+    }
+}
+
+private final class FolderPopoverAnchorView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? {
         nil
     }
