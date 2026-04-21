@@ -15,6 +15,8 @@ struct SmartStackTileView: View {
     @State private var isHovering = false
     @State private var scrollMonitor: Any?
     @State private var lastScrollAt: TimeInterval = 0
+    @State private var showsPagingIndicator = false
+    @State private var indicatorHideWorkItem: DispatchWorkItem?
 
     var body: some View {
         Group {
@@ -28,7 +30,8 @@ struct SmartStackTileView: View {
                                 WidgetTileView(
                                     tile: widget,
                                     cornerRadius: cornerRadius,
-                                    renderedSpan: renderedSpan
+                                    renderedSpan: renderedSpan,
+                                    isWithinStack: true
                                 )
                                     .frame(width: proxy.size.width, height: proxy.size.height)
                             }
@@ -38,15 +41,19 @@ struct SmartStackTileView: View {
                     }
                     .clipped()
 
-                    VStack(spacing: 5) {
-                        ForEach(tile.widgets.indices, id: \.self) { index in
-                            Capsule(style: .continuous)
-                                .fill(index == selection ? Color.primary.opacity(0.9) : Color.primary.opacity(0.22))
-                                .frame(width: 3, height: index == selection ? 18 : 8)
-                                .animation(.easeInOut(duration: 0.18), value: selection)
+                    if tile.widgets.count > 1 {
+                        VStack(spacing: 5) {
+                            ForEach(tile.widgets.indices, id: \.self) { index in
+                                Capsule(style: .continuous)
+                                    .fill(index == selection ? Color.primary.opacity(0.9) : Color.primary.opacity(0.22))
+                                    .frame(width: 3, height: index == selection ? 18 : 8)
+                                    .animation(.easeInOut(duration: 0.18), value: selection)
+                            }
                         }
+                        .frame(width: 6)
+                        .opacity(showsPagingIndicator ? 1 : 0)
+                        .animation(.easeInOut(duration: 0.18), value: showsPagingIndicator)
                     }
-                    .frame(width: 6)
                 }
             }
         }
@@ -54,9 +61,16 @@ struct SmartStackTileView: View {
         .onHover { isHovering = $0 }
         .onChange(of: tile.widgets.count) { _, count in
             selection = min(selection, max(0, count - 1))
+            if count <= 1 {
+                hidePagingIndicator()
+            }
         }
         .onAppear(perform: installScrollMonitor)
-        .onDisappear(perform: removeScrollMonitor)
+        .onDisappear {
+            removeScrollMonitor()
+            hidePagingIndicator()
+        }
+        .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius, style: .continuous))
     }
 
     private var emptyState: some View {
@@ -116,15 +130,36 @@ struct SmartStackTileView: View {
         if deltaY <= -threshold {
             selection = min(selection + 1, tile.widgets.count - 1)
             lastScrollAt = now
+            showPagingIndicator()
             return true
         }
 
         if deltaY >= threshold {
             selection = max(selection - 1, 0)
             lastScrollAt = now
+            showPagingIndicator()
             return true
         }
 
         return false
+    }
+
+    private func showPagingIndicator() {
+        indicatorHideWorkItem?.cancel()
+        showsPagingIndicator = true
+
+        let workItem = DispatchWorkItem {
+            showsPagingIndicator = false
+            indicatorHideWorkItem = nil
+        }
+
+        indicatorHideWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: workItem)
+    }
+
+    private func hidePagingIndicator() {
+        indicatorHideWorkItem?.cancel()
+        indicatorHideWorkItem = nil
+        showsPagingIndicator = false
     }
 }

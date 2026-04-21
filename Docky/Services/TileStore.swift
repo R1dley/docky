@@ -74,6 +74,8 @@ final class TileStore: ObservableObject {
         mediaPlayback.$statesByBundleIdentifier
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
+                self?.refreshPinnedTilesFromPreferences()
+                self?.refreshTrailingTilesFromPreferences()
                 self?.rebuildTiles()
             }
             .store(in: &cancellables)

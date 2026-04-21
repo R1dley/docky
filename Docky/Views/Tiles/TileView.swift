@@ -382,7 +382,8 @@ struct TileView: View {
             WidgetTileView(
                 tile: widget,
                 cornerRadius: nonAppTileCornerRadius,
-                renderedSpan: renderedWidgetSpan(for: widget.span)
+                renderedSpan: renderedWidgetSpan(for: widget.span),
+                isWithinStack: false
             )
         case .smartStack(let stack):
             SmartStackTileView(

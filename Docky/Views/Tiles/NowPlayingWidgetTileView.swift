@@ -11,6 +11,7 @@ struct NowPlayingWidgetTileView: View {
     let tile: WidgetTile
     let cornerRadius: CGFloat
     let renderedSpan: TileSpan
+    let isWithinStack: Bool
     @ObservedObject private var mediaPlayback = MediaPlaybackService.shared
     @State private var isHovering = false
 
@@ -22,8 +23,10 @@ struct NowPlayingWidgetTileView: View {
                 Color(nsColor: prominentTintColor)
                     .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius, style: .continuous))
 
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                if !isWithinStack {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                }
 
                 content(layout: layout)
             }
@@ -33,35 +36,14 @@ struct NowPlayingWidgetTileView: View {
 
     @ViewBuilder
     private func content(layout: LayoutMetrics) -> some View {
-        if playbackState?.hasContent != true {
-            notPlayingState(layout: layout)
-        } else {
-            switch renderedSpan {
-            case .one:
-                nowPlayingOneUp(layout: layout)
-            case .two:
-                nowPlayingTwoUp(layout: layout)
-            case .three:
-                nowPlayingThreeUp(layout: layout)
-            }
+        switch renderedSpan {
+        case .one:
+            nowPlayingOneUp(layout: layout)
+        case .two:
+            nowPlayingTwoUp(layout: layout)
+        case .three:
+            nowPlayingThreeUp(layout: layout)
         }
-    }
-
-    private func notPlayingState(layout: LayoutMetrics) -> some View {
-        VStack(spacing: layout.stackSpacing) {
-            if renderedSpan == .one {
-                Image(systemName: "music.note")
-                    .opacity(0.25)
-                    .font(.system(size: layout.largeGlyphSize, weight: .regular))
-            } else {
-                Text("Not Playing")
-                    .font(.system(size: layout.titleFontSize, weight: .semibold))
-            }
-        }
-        .foregroundStyle(primaryForegroundColor)
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .padding(layout.contentPadding)
     }
 
     private func nowPlayingOneUp(layout: LayoutMetrics) -> some View {
@@ -108,7 +90,7 @@ struct NowPlayingWidgetTileView: View {
             artworkView(size: layout.artworkSize, artworkCornerRadius: layout.artworkCornerRadius)
 
             VStack(alignment: .leading, spacing: layout.stackSpacing) {
-                Text(playbackTitle)
+                Text(playbackState?.isPresentable == false ? "Not Playing" : playbackTitle)
                     .font(.system(size: layout.titleFontSize, weight: .semibold))
                     .foregroundStyle(primaryForegroundColor)
                     .lineLimit(1)
@@ -138,7 +120,8 @@ struct NowPlayingWidgetTileView: View {
     @ViewBuilder
     private func artworkView(size: CGFloat?, artworkCornerRadius: CGFloat) -> some View {
         if let artworkData = playbackState?.artworkData,
-           let artworkImage = NSImage(data: artworkData) {
+           let artworkImage = NSImage(data: artworkData),
+           playbackState?.isPresentable == true {
             Image(nsImage: artworkImage)
                 .resizable()
                 .interpolation(.high)
@@ -146,11 +129,11 @@ struct NowPlayingWidgetTileView: View {
                 .frame(width: size, height: size)
                 .clipShape(RoundedRectangle(cornerRadius: artworkCornerRadius, style: .continuous))
         } else {
-            Image(nsImage: IconCacheService.shared.icon(forBundleIdentifier: tile.ownerBundleIdentifier))
-                .resizable()
-                .interpolation(.high)
+            Color.primary
+                .opacity(0.06)
                 .aspectRatio(contentMode: size == nil ? .fill : .fit)
                 .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: artworkCornerRadius, style: .continuous))
         }
     }
 
@@ -204,6 +187,10 @@ struct NowPlayingWidgetTileView: View {
     }
 
     private var prominentTintColor: NSColor {
+        guard playbackState?.isPresentable == true else {
+            return (NSColor.windowBackgroundColor.blended(withFraction: 0.18, of: .black) ?? .windowBackgroundColor)
+        }
+        
         if let artworkData = playbackState?.artworkData,
            let artworkImage = NSImage(data: artworkData),
            let extractedColor = Self.prominentColor(from: artworkImage) {

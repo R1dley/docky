@@ -9,6 +9,7 @@ struct WidgetTileView: View {
     let tile: WidgetTile
     let cornerRadius: CGFloat
     let renderedSpan: TileSpan
+    let isWithinStack: Bool
 
     var body: some View {
         switch tile.kind {
@@ -16,7 +17,8 @@ struct WidgetTileView: View {
             NowPlayingWidgetTileView(
                 tile: tile,
                 cornerRadius: cornerRadius,
-                renderedSpan: renderedSpan
+                renderedSpan: renderedSpan,
+                isWithinStack: isWithinStack
             )
         }
     }
