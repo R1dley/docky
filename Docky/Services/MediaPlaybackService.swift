@@ -133,8 +133,14 @@ final class MediaPlaybackService: ObservableObject {
             let now = Date()
             statesByBundleIdentifier = statesByBundleIdentifier.mapValues { existingState in
                 var updatedState = existingState
+                updatedState.title = ""
+                updatedState.artist = ""
+                updatedState.album = ""
+                updatedState.currentTime = 0
+                updatedState.duration = 0
                 updatedState.isAvailable = false
                 updatedState.isPlaying = false
+                updatedState.artworkData = nil
                 updatedState.lastUpdated = now
                 return updatedState
             }

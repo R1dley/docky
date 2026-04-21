@@ -40,8 +40,8 @@ struct TileView: View {
             return appContextActions(for: app, modifierFlags: modifierFlags)
         case .widget(let widget):
             return widgetContextActions(for: widget)
-        case .smartStack:
-            return []
+        case .smartStack(let stack):
+            return smartStackContextActions(for: stack)
         case .folder(let folder):
             return [
                 .action("Open in Finder") {
@@ -93,6 +93,20 @@ struct TileView: View {
         }
 
         if case .divider = tile.content {
+            actions.append(.divider)
+            actions.append(.action("Remove from Dock") {
+                TileStore.shared.removePinnedItem(tileID: tile.id)
+            })
+        }
+
+        if case .widget = tile.content {
+            actions.append(.divider)
+            actions.append(.action("Remove from Dock") {
+                TileStore.shared.removePinnedItem(tileID: tile.id)
+            })
+        }
+
+        if case .smartStack = tile.content {
             actions.append(.divider)
             actions.append(.action("Remove from Dock") {
                 TileStore.shared.removePinnedItem(tileID: tile.id)
@@ -474,23 +488,89 @@ struct TileView: View {
                 })
             }
 
+            if tile.id.hasPrefix("pinned:") {
+                actions.append(.divider)
+                actions.append(.submenu("Span", children: TileSpan.allCases.map { span in
+                    ContextAction.action(spanTitle(for: span), isOn: widget.span == span) {
+                        TileStore.shared.setPinnedWidgetSpan(tileID: tile.id, span: span)
+                    }
+                }))
+            }
+
             actions.append(.divider)
-            actions.append(.action("Remove Stack") {
-                TileStore.shared.removeWidget(
-                    kind: widget.kind,
-                    ownerBundleIdentifier: widget.ownerBundleIdentifier
-                )
-            })
+            if tile.id.hasPrefix("pinned:") {
+                actions.append(.action("Remove from Dock") {
+                    TileStore.shared.removePinnedItem(tileID: tile.id)
+                })
+            } else {
+                actions.append(.action("Remove Stack") {
+                    TileStore.shared.removeWidget(
+                        kind: widget.kind,
+                        ownerBundleIdentifier: widget.ownerBundleIdentifier
+                    )
+                })
+            }
             return actions
         }
     }
 
+    private func smartStackContextActions(for stack: SmartStackTile) -> [ContextAction] {
+        var actions: [ContextAction] = []
+        let widgetVisibilityActions = TileStore.shared.smartStackWidgetCandidates(tileID: tile.id).map { widget in
+            ContextAction.action(
+                widget.title,
+                isOn: TileStore.shared.isSmartStackWidgetVisible(
+                    tileID: tile.id,
+                    ownerBundleIdentifier: widget.ownerBundleIdentifier
+                )
+            ) {
+                let isVisible = TileStore.shared.isSmartStackWidgetVisible(
+                    tileID: tile.id,
+                    ownerBundleIdentifier: widget.ownerBundleIdentifier
+                )
+                TileStore.shared.setSmartStackWidgetVisibility(
+                    tileID: tile.id,
+                    ownerBundleIdentifier: widget.ownerBundleIdentifier,
+                    isVisible: !isVisible
+                )
+            }
+        }
+
+        if !widgetVisibilityActions.isEmpty {
+            actions.append(.submenu("Widgets", children: widgetVisibilityActions))
+        }
+
+        if tile.id.hasPrefix("pinned:") {
+            if !actions.isEmpty {
+                actions.append(.divider)
+            }
+            actions.append(.action("Edit Dock...") {
+                DockEditModeService.shared.enter()
+            })
+            actions.append(.action("Remove from Dock") {
+                TileStore.shared.removePinnedItem(tileID: tile.id)
+            })
+        }
+
+        return actions
+    }
     private func handleWidgetTap(_ widget: WidgetTile) {
         switch widget.kind {
         case .nowPlaying:
             Task {
                 await mediaPlayback.togglePlayPause(for: widget.ownerBundleIdentifier)
             }
+        }
+    }
+
+    private func spanTitle(for span: TileSpan) -> String {
+        switch span {
+        case .one:
+            "1 Tile"
+        case .two:
+            "2 Tiles"
+        case .three:
+            "3 Tiles"
         }
     }
 

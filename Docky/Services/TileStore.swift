@@ -218,17 +218,102 @@ final class TileStore: ObservableObject {
     func insertPinnedItem(kind: PinnedTileItemKind, at destinationIndex: Int) {
         let item: PinnedTileItem
         switch kind {
-        case .app:
+        case .app, .widget:
             return
+        case .smartStack:
+            item = .smartStack()
         case .spacer:
             item = .spacer()
         case .divider:
             item = .divider()
         }
 
+        insertPinnedItem(item, at: destinationIndex)
+    }
+
+    func insertPinnedItem(_ item: PinnedTileItem, at destinationIndex: Int) {
+
         var pinnedItems = preferences.pinnedItems
         let clampedDestinationIndex = min(max(destinationIndex, 0), pinnedItems.count)
         pinnedItems.insert(item, at: clampedDestinationIndex)
+        preferences.pinnedItems = pinnedItems
+        refreshPinnedTilesFromPreferences()
+        rebuildTiles()
+    }
+
+    func smartStackWidgetCandidates(tileID: String) -> [WidgetTile] {
+        guard let item = pinnedItem(forTileID: tileID), item.kind == .smartStack else {
+            return []
+        }
+
+        let hiddenOwnerBundleIdentifierSet = Set(item.hiddenWidgetOwnerBundleIdentifiers)
+        let visibleWidgets = allSmartStackWidgets().filter {
+            !hiddenOwnerBundleIdentifierSet.contains($0.ownerBundleIdentifier)
+        }
+        let hiddenWidgets = allSmartStackWidgets().filter {
+            hiddenOwnerBundleIdentifierSet.contains($0.ownerBundleIdentifier)
+        }
+        return visibleWidgets + hiddenWidgets
+    }
+
+    func isSmartStackWidgetVisible(tileID: String, ownerBundleIdentifier: String) -> Bool {
+        guard let item = pinnedItem(forTileID: tileID), item.kind == .smartStack else {
+            return false
+        }
+
+        return !item.hiddenWidgetOwnerBundleIdentifiers.contains(ownerBundleIdentifier)
+    }
+
+    func setSmartStackWidgetVisibility(tileID: String, ownerBundleIdentifier: String, isVisible: Bool) {
+        guard let itemIndex = preferences.pinnedItems.firstIndex(where: { Self.pinnedTileID(for: $0) == tileID }),
+              preferences.pinnedItems[itemIndex].kind == .smartStack else {
+            return
+        }
+
+        var pinnedItems = preferences.pinnedItems
+        let existingItem = pinnedItems[itemIndex]
+        var hiddenOwnerBundleIdentifiers = Set(existingItem.hiddenWidgetOwnerBundleIdentifiers)
+        if isVisible {
+            hiddenOwnerBundleIdentifiers.remove(ownerBundleIdentifier)
+        } else {
+            hiddenOwnerBundleIdentifiers.insert(ownerBundleIdentifier)
+        }
+
+        pinnedItems[itemIndex] = PinnedTileItem(
+            id: existingItem.id,
+            kind: existingItem.kind,
+            bundleIdentifier: existingItem.bundleIdentifier,
+            widgetKind: existingItem.widgetKind,
+            widgetOwnerBundleIdentifier: existingItem.widgetOwnerBundleIdentifier,
+            widgetSpan: existingItem.widgetSpan,
+            hiddenWidgetOwnerBundleIdentifiers: hiddenOwnerBundleIdentifiers.sorted()
+        )
+        preferences.pinnedItems = pinnedItems
+        refreshPinnedTilesFromPreferences()
+        rebuildTiles()
+    }
+
+    func setPinnedWidgetSpan(tileID: String, span: TileSpan) {
+        guard let itemIndex = preferences.pinnedItems.firstIndex(where: { Self.pinnedTileID(for: $0) == tileID }),
+              preferences.pinnedItems[itemIndex].kind == .widget else {
+            return
+        }
+
+        let existingItem = preferences.pinnedItems[itemIndex]
+        guard existingItem.widgetSpan != span else {
+            return
+        }
+
+        var pinnedItems = preferences.pinnedItems
+        pinnedItems[itemIndex] = PinnedTileItem(
+            id: existingItem.id,
+            kind: existingItem.kind,
+            bundleIdentifier: existingItem.bundleIdentifier,
+            widgetKind: existingItem.widgetKind,
+            widgetOwnerBundleIdentifier: existingItem.widgetOwnerBundleIdentifier,
+            widgetSpan: span,
+            hiddenWidgetOwnerBundleIdentifiers: existingItem.hiddenWidgetOwnerBundleIdentifiers
+        )
         preferences.pinnedItems = pinnedItems
         refreshPinnedTilesFromPreferences()
         rebuildTiles()
@@ -272,6 +357,10 @@ final class TileStore: ObservableObject {
         pinnedTiles = preferences.pinnedItems.compactMap(tile(for:))
     }
 
+    private func pinnedItem(forTileID tileID: String) -> PinnedTileItem? {
+        preferences.pinnedItems.first { Self.pinnedTileID(for: $0) == tileID }
+    }
+
     private func tile(for item: PinnedTileItem) -> Tile? {
         switch item.kind {
         case .app:
@@ -282,6 +371,27 @@ final class TileStore: ObservableObject {
                 return Self.makePinnedTile(from: tile, item: item)
             }
             return Self.makePinnedTile(bundleIdentifier: bundleIdentifier, item: item)
+        case .widget:
+            guard let widgetKind = item.widgetKind,
+                  let ownerBundleIdentifier = item.widgetOwnerBundleIdentifier else {
+                return nil
+            }
+            return Tile(
+                id: Self.pinnedTileID(for: item),
+                content: .widget(Self.makeWidgetTile(
+                    kind: widgetKind,
+                    ownerBundleIdentifier: ownerBundleIdentifier,
+                    span: item.widgetSpan ?? .three
+                ))
+            )
+        case .smartStack:
+            return Tile(
+                id: Self.pinnedTileID(for: item),
+                content: .smartStack(Self.makeSmartStackTile(
+                    identifier: item.id,
+                    widgets: visibleSmartStackWidgets(hiddenOwnerBundleIdentifiers: item.hiddenWidgetOwnerBundleIdentifiers)
+                ))
+            )
         case .spacer:
             return Tile(id: Self.pinnedTileID(for: item), content: .spacer)
         case .divider:
@@ -302,7 +412,6 @@ final class TileStore: ObservableObject {
         )
 
         let runningTiles = displayedRunning.map(Self.tile(for:))
-        let trailingSmartStackTile = smartStackTile()
 
         var result: [Tile] = tilesWithWidgets(appendedTo: [Self.finderTile()])
         result.append(contentsOf: tilesWithWidgets(appendedTo: pinnedWithoutFinder))
@@ -311,9 +420,6 @@ final class TileStore: ObservableObject {
         }
         result.append(contentsOf: tilesWithWidgets(appendedTo: runningTiles))
         result.append(Tile(id: "divider:trailing", content: .divider))
-        if let trailingSmartStackTile {
-            result.append(trailingSmartStackTile)
-        }
         result.append(contentsOf: otherTiles)
         result.append(Tile(id: "trash", content: .trash))
         tiles = result
@@ -350,32 +456,30 @@ final class TileStore: ObservableObject {
             }
     }
 
-    private func smartStackTile() -> Tile? {
-        let widgets = mediaPlayback.statesByBundleIdentifier.values
+    private func allSmartStackWidgets() -> [WidgetTile] {
+        mediaPlayback.statesByBundleIdentifier.values
             .filter(\.hasContent)
             .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
             .map { state in
-                WidgetTile(
-                    identifier: "\(state.bundleIdentifier):nowPlaying",
-                    title: WidgetKind.nowPlaying.title,
+                Self.makeWidgetTile(
                     kind: .nowPlaying,
                     ownerBundleIdentifier: state.bundleIdentifier,
                     span: .three
                 )
             }
+    }
 
-        guard !widgets.isEmpty else {
-            return nil
-        }
+    private func visibleSmartStackWidgets(hiddenOwnerBundleIdentifiers: [String]) -> [WidgetTile] {
+        let hiddenOwnerBundleIdentifierSet = Set(hiddenOwnerBundleIdentifiers)
+        return allSmartStackWidgets().filter { !hiddenOwnerBundleIdentifierSet.contains($0.ownerBundleIdentifier) }
+    }
 
-        return Tile(
-            id: "smart-stack:media",
-            content: .smartStack(SmartStackTile(
-                identifier: "media",
-                title: "Smart Stack",
-                widgets: widgets,
-                span: .three
-            ))
+    private static func makeSmartStackTile(identifier: String, widgets: [WidgetTile]) -> SmartStackTile {
+        SmartStackTile(
+            identifier: identifier,
+            title: "Smart Stack",
+            widgets: widgets,
+            span: .three
         )
     }
 
@@ -462,11 +566,29 @@ final class TileStore: ObservableObject {
                 return nil
             }
             return .app(bundleIdentifier: app.bundleIdentifier)
+        case .widget, .smartStack:
+            return nil
         case .spacer:
-            return PinnedTileItem(id: tile.id, kind: .spacer, bundleIdentifier: nil)
+            return PinnedTileItem(
+                id: tile.id,
+                kind: .spacer,
+                bundleIdentifier: nil,
+                widgetKind: nil,
+                widgetOwnerBundleIdentifier: nil,
+                widgetSpan: nil,
+                hiddenWidgetOwnerBundleIdentifiers: []
+            )
         case .divider:
-            return PinnedTileItem(id: tile.id, kind: .divider, bundleIdentifier: nil)
-        case .widget, .smartStack, .folder, .trash:
+            return PinnedTileItem(
+                id: tile.id,
+                kind: .divider,
+                bundleIdentifier: nil,
+                widgetKind: nil,
+                widgetOwnerBundleIdentifier: nil,
+                widgetSpan: nil,
+                hiddenWidgetOwnerBundleIdentifiers: []
+            )
+        case .folder, .trash:
             return nil
         }
     }
@@ -531,6 +653,20 @@ final class TileStore: ObservableObject {
                 bundleIdentifier: bundleIdentifier,
                 displayName: FileManager.default.displayName(atPath: url.path)
             ))
+        )
+    }
+
+    private static func makeWidgetTile(
+        kind: WidgetKind,
+        ownerBundleIdentifier: String,
+        span: TileSpan
+    ) -> WidgetTile {
+        WidgetTile(
+            identifier: "\(ownerBundleIdentifier):\(kind.rawValue)",
+            title: kind.title,
+            kind: kind,
+            ownerBundleIdentifier: ownerBundleIdentifier,
+            span: span
         )
     }
 

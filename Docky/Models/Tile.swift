@@ -69,10 +69,7 @@ struct WidgetTile: Equatable {
     let span: TileSpan
 
     var effectiveSpan: TileSpan {
-        switch kind {
-        case .nowPlaying:
-            .three
-        }
+        span
     }
 }
 
@@ -81,6 +78,10 @@ struct SmartStackTile: Equatable {
     let title: String
     let widgets: [WidgetTile]
     let span: TileSpan
+
+    var allWidgetOwnerBundleIdentifiers: [String] {
+        Array(Set(widgets.map(\.ownerBundleIdentifier))).sorted()
+    }
 }
 
 struct FolderTile: Equatable {

@@ -15,6 +15,8 @@ import Foundation
 
 enum PinnedTileItemKind: String, Codable, Equatable {
     case app
+    case widget
+    case smartStack
     case spacer
     case divider
 }
@@ -23,17 +25,69 @@ struct PinnedTileItem: Codable, Equatable, Identifiable {
     let id: String
     let kind: PinnedTileItemKind
     let bundleIdentifier: String?
+    let widgetKind: WidgetKind?
+    let widgetOwnerBundleIdentifier: String?
+    let widgetSpan: TileSpan?
+    let hiddenWidgetOwnerBundleIdentifiers: [String]
 
     nonisolated static func app(bundleIdentifier: String) -> Self {
-        Self(id: "app:\(bundleIdentifier)", kind: .app, bundleIdentifier: bundleIdentifier)
+        Self(
+            id: "app:\(bundleIdentifier)",
+            kind: .app,
+            bundleIdentifier: bundleIdentifier,
+            widgetKind: nil,
+            widgetOwnerBundleIdentifier: nil,
+            widgetSpan: nil,
+            hiddenWidgetOwnerBundleIdentifiers: []
+        )
+    }
+
+    nonisolated static func widget(kind: WidgetKind, ownerBundleIdentifier: String, span: TileSpan = .three) -> Self {
+        Self(
+            id: "custom:\(UUID().uuidString)",
+            kind: .widget,
+            bundleIdentifier: nil,
+            widgetKind: kind,
+            widgetOwnerBundleIdentifier: ownerBundleIdentifier,
+            widgetSpan: span,
+            hiddenWidgetOwnerBundleIdentifiers: []
+        )
+    }
+
+    nonisolated static func smartStack(hiddenWidgetOwnerBundleIdentifiers: [String] = []) -> Self {
+        Self(
+            id: "custom:\(UUID().uuidString)",
+            kind: .smartStack,
+            bundleIdentifier: nil,
+            widgetKind: nil,
+            widgetOwnerBundleIdentifier: nil,
+            widgetSpan: nil,
+            hiddenWidgetOwnerBundleIdentifiers: hiddenWidgetOwnerBundleIdentifiers
+        )
     }
 
     nonisolated static func spacer() -> Self {
-        Self(id: "custom:\(UUID().uuidString)", kind: .spacer, bundleIdentifier: nil)
+        Self(
+            id: "custom:\(UUID().uuidString)",
+            kind: .spacer,
+            bundleIdentifier: nil,
+            widgetKind: nil,
+            widgetOwnerBundleIdentifier: nil,
+            widgetSpan: nil,
+            hiddenWidgetOwnerBundleIdentifiers: []
+        )
     }
 
     nonisolated static func divider() -> Self {
-        Self(id: "custom:\(UUID().uuidString)", kind: .divider, bundleIdentifier: nil)
+        Self(
+            id: "custom:\(UUID().uuidString)",
+            kind: .divider,
+            bundleIdentifier: nil,
+            widgetKind: nil,
+            widgetOwnerBundleIdentifier: nil,
+            widgetSpan: nil,
+            hiddenWidgetOwnerBundleIdentifiers: []
+        )
     }
 }
 

@@ -15,34 +15,59 @@ struct SmartStackTileView: View {
     @State private var lastScrollAt: TimeInterval = 0
 
     var body: some View {
-        HStack(spacing: 8) {
-            GeometryReader { proxy in
-                VStack(spacing: 0) {
-                    ForEach(Array(tile.widgets.enumerated()), id: \.element.identifier) { index, widget in
-                        WidgetTileView(tile: widget)
-                            .frame(width: proxy.size.width, height: proxy.size.height)
+        Group {
+            if tile.widgets.isEmpty {
+                emptyState
+            } else {
+                HStack(spacing: 8) {
+                    GeometryReader { proxy in
+                        VStack(spacing: 0) {
+                            ForEach(Array(tile.widgets.enumerated()), id: \.element.identifier) { index, widget in
+                                WidgetTileView(tile: widget, usesOuterPadding: false)
+                                    .frame(width: proxy.size.width, height: proxy.size.height)
+                            }
+                        }
+                        .offset(y: -CGFloat(selection) * proxy.size.height)
+                        .animation(.easeInOut(duration: 0.2), value: selection)
                     }
-                }
-                .offset(y: -CGFloat(selection) * proxy.size.height)
-                .animation(.easeInOut(duration: 0.2), value: selection)
-            }
-            .clipped()
+                    .clipped()
 
-            VStack(spacing: 5) {
-                ForEach(tile.widgets.indices, id: \.self) { index in
-                    Capsule(style: .continuous)
-                        .fill(index == selection ? Color.primary.opacity(0.9) : Color.primary.opacity(0.22))
-                        .frame(width: 3, height: index == selection ? 18 : 8)
-                        .animation(.easeInOut(duration: 0.18), value: selection)
+                    VStack(spacing: 5) {
+                        ForEach(tile.widgets.indices, id: \.self) { index in
+                            Capsule(style: .continuous)
+                                .fill(index == selection ? Color.primary.opacity(0.9) : Color.primary.opacity(0.22))
+                                .frame(width: 3, height: index == selection ? 18 : 8)
+                                .animation(.easeInOut(duration: 0.18), value: selection)
+                        }
+                    }
+                    .frame(width: 6)
                 }
             }
-            .frame(width: 6)
         }
         .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onHover { isHovering = $0 }
+        .onChange(of: tile.widgets.count) { _, count in
+            selection = min(selection, max(0, count - 1))
+        }
         .onAppear(perform: installScrollMonitor)
         .onDisappear(perform: removeScrollMonitor)
+    }
+
+    private var emptyState: some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(.black.opacity(0.12))
+            .overlay {
+                VStack(spacing: 4) {
+                    Label("Smart Stack", systemImage: "square.stack.3d.up")
+                        .font(.caption.weight(.semibold))
+                    Text("No widgets available")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            }
     }
 
     private func installScrollMonitor() {

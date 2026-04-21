@@ -125,6 +125,7 @@ private struct DockEditorOverlayView: View {
     @ObservedObject private var editMode = DockEditModeService.shared
     @ObservedObject private var dockSettings = DockSettingsService.shared
     @ObservedObject private var preferences = DockyPreferences.shared
+    @ObservedObject private var mediaPlayback = MediaPlaybackService.shared
 
     var body: some View {
         ZStack {
@@ -183,10 +184,21 @@ private struct DockEditorOverlayView: View {
 
     private var editorPalette: some View {
         PaletteContainer(position: position) {
-            ForEach([PinnedTileItemKind.spacer, .divider], id: \.rawValue) { kind in
-                PaletteItemView(kind: kind)
+            ForEach(paletteItems) { item in
+                PaletteItemView(item: item)
             }
         }
+    }
+
+    private var paletteItems: [DockEditPaletteItem] {
+        var items: [DockEditPaletteItem] = [.spacer, .divider, .smartStack]
+        items.append(contentsOf: mediaPlayback.statesByBundleIdentifier.values
+            .filter(\.hasContent)
+            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            .map { state in
+                .widget(ownerBundleIdentifier: state.bundleIdentifier, kind: .nowPlaying)
+            })
+        return items
     }
 
     private var position: ResolvedDockWindowPosition {
@@ -254,7 +266,7 @@ private struct PaletteContainer<Content: View>: View {
 }
 
 private struct PaletteItemView: View {
-    let kind: PinnedTileItemKind
+    let item: DockEditPaletteItem
     @ObservedObject private var editMode = DockEditModeService.shared
     @State private var isDragging = false
 
@@ -284,8 +296,8 @@ private struct PaletteItemView: View {
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .onDrag {
             isDragging = true
-            editMode.beginPaletteDrag(kind: kind)
-            return NSItemProvider(object: kind.rawValue as NSString)
+            editMode.beginPaletteDrag(item: item)
+            return NSItemProvider(object: item.id as NSString)
         }
         .onDisappear {
             isDragging = false
@@ -293,35 +305,41 @@ private struct PaletteItemView: View {
     }
 
     private var iconName: String {
-        switch kind {
-        case .app:
-            "app"
+        switch item {
         case .spacer:
             "rectangle.split.3x1"
         case .divider:
             "line.3.horizontal.decrease"
+        case .widget:
+            "waveform"
+        case .smartStack:
+            "square.stack.3d.up"
         }
     }
 
     private var title: String {
-        switch kind {
-        case .app:
-            "App"
+        switch item {
         case .spacer:
             "Spacer"
         case .divider:
             "Divider"
+        case .widget(_, let kind):
+            kind.title
+        case .smartStack:
+            "Smart Stack"
         }
     }
 
     private var subtitle: String {
-        switch kind {
-        case .app:
-            ""
+        switch item {
         case .spacer:
             "Adds breathing room between pinned tiles"
         case .divider:
             "Adds a visual separator inside pinned tiles"
+        case .widget:
+            "Adds a now playing widget inline"
+        case .smartStack:
+            "Adds a stack of available media widgets"
         }
     }
 }

@@ -7,8 +7,28 @@ import Combine
 import Foundation
 import CoreGraphics
 
+enum DockEditPaletteItem: Equatable, Identifiable {
+    case spacer
+    case divider
+    case widget(ownerBundleIdentifier: String, kind: WidgetKind)
+    case smartStack
+
+    var id: String {
+        switch self {
+        case .spacer:
+            "spacer"
+        case .divider:
+            "divider"
+        case .widget(let ownerBundleIdentifier, let kind):
+            "widget:\(ownerBundleIdentifier):\(kind.rawValue)"
+        case .smartStack:
+            "smart-stack"
+        }
+    }
+}
+
 struct DockEditPaletteDrag: Equatable {
-    let kind: PinnedTileItemKind
+    let item: DockEditPaletteItem
     let location: CGPoint
 }
 
@@ -34,14 +54,14 @@ final class DockEditModeService: ObservableObject {
         isActive ? exit() : enter()
     }
 
-    func updatePaletteDrag(kind: PinnedTileItemKind, location: CGPoint) {
+    func updatePaletteDrag(item: DockEditPaletteItem, location: CGPoint) {
         isActive = true
-        paletteDrag = DockEditPaletteDrag(kind: kind, location: location)
+        paletteDrag = DockEditPaletteDrag(item: item, location: location)
     }
 
-    func beginPaletteDrag(kind: PinnedTileItemKind) {
+    func beginPaletteDrag(item: DockEditPaletteItem) {
         isActive = true
-        paletteDrag = DockEditPaletteDrag(kind: kind, location: .zero)
+        paletteDrag = DockEditPaletteDrag(item: item, location: .zero)
     }
 
     func endPaletteDrag() {

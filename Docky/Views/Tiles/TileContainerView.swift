@@ -61,13 +61,18 @@ struct TileContainerView: View {
                     editMode.endPaletteDrag()
                 },
                 performInsert: {
-                    guard let kind = editMode.paletteDrag?.kind,
+                    guard let paletteItem = editMode.paletteDrag?.item,
                           let destinationIndex = editMode.paletteDropDestinationIndex else {
                         editMode.endPaletteDrag()
                         return false
                     }
 
-                    TileStore.shared.insertPinnedItem(kind: kind, at: destinationIndex)
+                    guard let pinnedItem = makePinnedItem(from: paletteItem) else {
+                        editMode.endPaletteDrag()
+                        return false
+                    }
+
+                    TileStore.shared.insertPinnedItem(pinnedItem, at: destinationIndex)
                     editMode.endPaletteDrag()
                     return true
                 }
@@ -170,13 +175,32 @@ struct TileContainerView: View {
             return nil
         }
 
-        switch paletteDrag.kind {
-        case .app:
-            return nil
+        switch paletteDrag.item {
         case .spacer:
             return Tile(id: "editor-preview:spacer", content: .spacer)
         case .divider:
             return Tile(id: "editor-preview:divider", content: .divider)
+        case .widget(let ownerBundleIdentifier, let kind):
+            return Tile(
+                id: "editor-preview:widget",
+                content: .widget(WidgetTile(
+                    identifier: "editor-preview:widget",
+                    title: kind.title,
+                    kind: kind,
+                    ownerBundleIdentifier: ownerBundleIdentifier,
+                    span: .three
+                ))
+            )
+        case .smartStack:
+            return Tile(
+                id: "editor-preview:smart-stack",
+                content: .smartStack(SmartStackTile(
+                    identifier: "editor-preview:smart-stack",
+                    title: "Smart Stack",
+                    widgets: [],
+                    span: .three
+                ))
+            )
         }
     }
 
@@ -237,10 +261,23 @@ struct TileContainerView: View {
         switch tile.content {
         case .app(let app):
             return !app.bundleIdentifier.isEmpty && app.bundleIdentifier != "com.apple.finder"
-        case .spacer, .divider:
+        case .widget, .smartStack, .spacer, .divider:
             return editMode.isActive && isPinnedReorderable(tileID: tile.id)
-        case .widget, .smartStack, .folder, .trash:
+        case .folder, .trash:
             return false
+        }
+    }
+
+    private func makePinnedItem(from paletteItem: DockEditPaletteItem) -> PinnedTileItem? {
+        switch paletteItem {
+        case .spacer:
+            .spacer()
+        case .divider:
+            .divider()
+        case .widget(let ownerBundleIdentifier, let kind):
+            .widget(kind: kind, ownerBundleIdentifier: ownerBundleIdentifier)
+        case .smartStack:
+            .smartStack()
         }
     }
 
