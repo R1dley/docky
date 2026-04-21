@@ -121,6 +121,7 @@ private final class DockEditorOverlayWindow: NSWindow {
 }
 
 private struct DockEditorOverlayView: View {
+    private let paletteDockGap: CGFloat = 28
     @ObservedObject var state: DockEditorOverlayState
     @ObservedObject private var editMode = DockEditModeService.shared
     @ObservedObject private var dockSettings = DockSettingsService.shared
@@ -159,25 +160,25 @@ private struct DockEditorOverlayView: View {
             VStack {
                 Spacer()
                 editorPalette
-                    .padding(.bottom, 96)
+                    .padding(.bottom, paletteInset)
             }
         case .top:
             VStack {
                 editorPalette
-                    .padding(.top, 96)
+                    .padding(.top, paletteInset)
                 Spacer()
             }
         case .left:
             HStack {
                 editorPalette
-                    .padding(.leading, 96)
+                    .padding(.leading, paletteInset)
                 Spacer()
             }
         case .right:
             HStack {
                 Spacer()
                 editorPalette
-                    .padding(.trailing, 96)
+                    .padding(.trailing, paletteInset)
             }
         }
     }
@@ -203,6 +204,15 @@ private struct DockEditorOverlayView: View {
 
     private var position: ResolvedDockWindowPosition {
         preferences.windowPosition.resolved(systemOrientation: dockSettings.orientation)
+    }
+
+    private var paletteInset: CGFloat {
+        switch position {
+        case .bottom, .top:
+            state.dockFrame.height + paletteDockGap
+        case .left, .right:
+            state.dockFrame.width + paletteDockGap
+        }
     }
 }
 
@@ -248,7 +258,7 @@ private struct PaletteContainer<Content: View>: View {
                 .buttonStyle(.borderedProminent)
             }
 
-            Text("Drag controls into the pinned section to insert them between apps.")
+            Text("Drag controls into the pinned or folder/trash section to place them where you want.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 

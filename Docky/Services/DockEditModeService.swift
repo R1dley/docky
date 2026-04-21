@@ -32,12 +32,22 @@ struct DockEditPaletteDrag: Equatable {
     let location: CGPoint
 }
 
+enum DockEditDropSection: Equatable {
+    case pinned
+    case trailing
+}
+
+struct DockEditDropDestination: Equatable {
+    let section: DockEditDropSection
+    let index: Int
+}
+
 final class DockEditModeService: ObservableObject {
     static let shared = DockEditModeService()
 
     @Published private(set) var isActive = false
     @Published private(set) var paletteDrag: DockEditPaletteDrag?
-    @Published var paletteDropDestinationIndex: Int?
+    @Published var paletteDropDestination: DockEditDropDestination?
 
     private init() {}
 
@@ -66,6 +76,6 @@ final class DockEditModeService: ObservableObject {
 
     func endPaletteDrag() {
         paletteDrag = nil
-        paletteDropDestinationIndex = nil
+        paletteDropDestination = nil
     }
 }

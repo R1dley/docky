@@ -73,12 +73,12 @@ struct TileView: View {
                 }
             ]
         case .spacer, .divider:
-            return customPinnedTileActions
+            return customDockyTileActions
         }
     }
 
-    private var customPinnedTileActions: [ContextAction] {
-        guard tile.id.hasPrefix("pinned:") else {
+    private var customDockyTileActions: [ContextAction] {
+        guard isDockyPinnedTile || isDockyTrailingTile else {
             return []
         }
 
@@ -91,28 +91,28 @@ struct TileView: View {
         if case .spacer = tile.content {
             actions.append(.divider)
             actions.append(.action("Remove from Dock") {
-                TileStore.shared.removePinnedItem(tileID: tile.id)
+                removeDockyTile()
             })
         }
 
         if case .divider = tile.content {
             actions.append(.divider)
             actions.append(.action("Remove from Dock") {
-                TileStore.shared.removePinnedItem(tileID: tile.id)
+                removeDockyTile()
             })
         }
 
         if case .widget = tile.content {
             actions.append(.divider)
             actions.append(.action("Remove from Dock") {
-                TileStore.shared.removePinnedItem(tileID: tile.id)
+                removeDockyTile()
             })
         }
 
         if case .smartStack = tile.content {
             actions.append(.divider)
             actions.append(.action("Remove from Dock") {
-                TileStore.shared.removePinnedItem(tileID: tile.id)
+                removeDockyTile()
             })
         }
 
@@ -127,6 +127,22 @@ struct TileView: View {
         }
 
         return actions
+    }
+
+    private var isDockyPinnedTile: Bool {
+        tile.id.hasPrefix("pinned:")
+    }
+
+    private var isDockyTrailingTile: Bool {
+        tile.id.hasPrefix("trailing:")
+    }
+
+    private func removeDockyTile() {
+        if isDockyPinnedTile {
+            TileStore.shared.removePinnedItem(tileID: tile.id)
+        } else if isDockyTrailingTile {
+            TileStore.shared.removeTrailingItem(tileID: tile.id)
+        }
     }
 
     var body: some View {
@@ -471,7 +487,7 @@ struct TileView: View {
     }
 
     private func appFolderContextActions(for folder: AppFolderTile) -> [ContextAction] {
-        var actions = customPinnedTileActions
+        var actions = customDockyTileActions
 
         let appActions = folder.apps.map { app in
             ContextAction.submenu(app.displayName, children: [
@@ -635,19 +651,23 @@ struct TileView: View {
                 })
             }
 
-            if tile.id.hasPrefix("pinned:") {
+            if isDockyPinnedTile || isDockyTrailingTile {
                 actions.append(.divider)
                 actions.append(.submenu("Span", children: TileSpan.allCases.map { span in
                     ContextAction.action(spanTitle(for: span), isOn: widget.span == span) {
-                        TileStore.shared.setPinnedWidgetSpan(tileID: tile.id, span: span)
+                        if isDockyPinnedTile {
+                            TileStore.shared.setPinnedWidgetSpan(tileID: tile.id, span: span)
+                        } else if isDockyTrailingTile {
+                            TileStore.shared.setTrailingWidgetSpan(tileID: tile.id, span: span)
+                        }
                     }
                 }))
             }
 
             actions.append(.divider)
-            if tile.id.hasPrefix("pinned:") {
+            if isDockyPinnedTile || isDockyTrailingTile {
                 actions.append(.action("Remove from Dock") {
-                    TileStore.shared.removePinnedItem(tileID: tile.id)
+                    removeDockyTile()
                 })
             } else {
                 actions.append(.action("Remove Stack") {
@@ -687,7 +707,7 @@ struct TileView: View {
             actions.append(.submenu("Widgets", children: widgetVisibilityActions))
         }
 
-        if tile.id.hasPrefix("pinned:") {
+        if isDockyPinnedTile || isDockyTrailingTile {
             if !actions.isEmpty {
                 actions.append(.divider)
             }
@@ -695,7 +715,7 @@ struct TileView: View {
                 DockEditModeService.shared.enter()
             })
             actions.append(.action("Remove from Dock") {
-                TileStore.shared.removePinnedItem(tileID: tile.id)
+                removeDockyTile()
             })
         }
 

@@ -21,7 +21,9 @@ final class TileStore: ObservableObject {
     private static let changeNotification = Notification.Name("com.apple.dock.prefchanged")
 
     private var pinnedTiles: [Tile] = []
-    private var otherTiles: [Tile] = []
+    private var systemOtherTiles: [Tile] = []
+    private var systemOtherTilesByID: [String: Tile] = [:]
+    private var trailingTiles: [Tile] = []
     private var dockPinnedTilesByBundleIdentifier: [String: Tile] = [:]
     /// Currently displayed unpinned running apps, in visual order. May contain
     /// one "ghost" entry at the end — an app that recently exited but sat at
@@ -61,6 +63,14 @@ final class TileStore: ObservableObject {
                 self?.rebuildTiles()
             }
             .store(in: &cancellables)
+        preferences.$trailingItems
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshTrailingTilesFromPreferences()
+                self?.rebuildTiles()
+            }
+            .store(in: &cancellables)
         mediaPlayback.$statesByBundleIdentifier
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -78,7 +88,9 @@ final class TileStore: ObservableObject {
     func refresh() {
         guard let plist = DockPlistReader.read() else {
             pinnedTiles = []
-            otherTiles = []
+            systemOtherTiles = []
+            systemOtherTilesByID = [:]
+            trailingTiles = []
             rebuildTiles()
             return
         }
@@ -92,14 +104,21 @@ final class TileStore: ObservableObject {
         })
         seedPinnedPreferencesIfNeeded(from: refreshedPinnedTiles)
         refreshPinnedTilesFromPreferences()
-        otherTiles = others.enumerated().compactMap { index, entry in
+        systemOtherTiles = others.enumerated().compactMap { index, entry in
             Self.parse(entry: entry, fallbackID: Self.fallbackTileID(for: entry, at: index, section: "persistent-others"))
         }
+        systemOtherTilesByID = Dictionary(uniqueKeysWithValues: systemOtherTiles.map { ($0.id, $0) })
+        refreshTrailingPreferencesIfNeeded()
+        refreshTrailingTilesFromPreferences()
         rebuildTiles()
     }
 
     func isPinnedReorderable(tileID: String) -> Bool {
         pinnedTiles.contains { $0.id == tileID }
+    }
+
+    func isTrailingReorderable(tileID: String) -> Bool {
+        trailingTiles.contains { $0.id == tileID }
     }
 
     func isPinned(bundleIdentifier: String) -> Bool {
@@ -403,37 +422,239 @@ final class TileStore: ObservableObject {
         rebuildTiles()
     }
 
-    func smartStackWidgetCandidates(tileID: String) -> [WidgetTile] {
-        guard let item = pinnedItem(forTileID: tileID), item.kind == .smartStack else {
-            return []
-        }
-
-        let hiddenOwnerBundleIdentifierSet = Set(item.hiddenWidgetOwnerBundleIdentifiers)
-        let visibleWidgets = allSmartStackWidgets().filter {
-            !hiddenOwnerBundleIdentifierSet.contains($0.ownerBundleIdentifier)
-        }
-        let hiddenWidgets = allSmartStackWidgets().filter {
-            hiddenOwnerBundleIdentifierSet.contains($0.ownerBundleIdentifier)
-        }
-        return visibleWidgets + hiddenWidgets
-    }
-
-    func isSmartStackWidgetVisible(tileID: String, ownerBundleIdentifier: String) -> Bool {
-        guard let item = pinnedItem(forTileID: tileID), item.kind == .smartStack else {
-            return false
-        }
-
-        return !item.hiddenWidgetOwnerBundleIdentifiers.contains(ownerBundleIdentifier)
-    }
-
-    func setSmartStackWidgetVisibility(tileID: String, ownerBundleIdentifier: String, isVisible: Bool) {
-        guard let itemIndex = preferences.pinnedItems.firstIndex(where: { Self.pinnedTileID(for: $0) == tileID }),
-              preferences.pinnedItems[itemIndex].kind == .smartStack else {
+    func setTrailingTileOrder(ids: [String]) {
+        guard ids.count == trailingTiles.count else {
             return
         }
 
-        var pinnedItems = preferences.pinnedItems
-        let existingItem = pinnedItems[itemIndex]
+        let itemsByID = Dictionary(uniqueKeysWithValues: preferences.trailingItems.map { (Self.trailingTileID(for: $0), $0) })
+        let reorderedItems = ids.compactMap { itemsByID[$0] }
+        guard reorderedItems.count == preferences.trailingItems.count else {
+            return
+        }
+
+        preferences.trailingItems = reorderedItems
+        refreshTrailingTilesFromPreferences()
+        rebuildTiles()
+    }
+
+    func insertTrailingItem(_ item: TrailingTileItem, at destinationIndex: Int) {
+        var trailingItems = preferences.trailingItems
+        let clampedDestinationIndex = min(max(destinationIndex, 0), trailingItems.count)
+        trailingItems.insert(item, at: clampedDestinationIndex)
+        preferences.trailingItems = trailingItems
+        refreshTrailingTilesFromPreferences()
+        rebuildTiles()
+    }
+
+    func makePinnedItem(from tile: Tile) -> PinnedTileItem? {
+        switch itemScope(forTileID: tile.id) {
+        case .pinned(let item):
+            return item
+        case .trailing(let item):
+            switch item.kind {
+            case .widget:
+                guard let widgetKind = item.widgetKind,
+                      let ownerBundleIdentifier = item.widgetOwnerBundleIdentifier else {
+                    return nil
+                }
+                return PinnedTileItem(
+                    id: item.id,
+                    kind: .widget,
+                    bundleIdentifier: nil,
+                    folderDisplayName: nil,
+                    folderBundleIdentifiers: [],
+                    widgetKind: widgetKind,
+                    widgetOwnerBundleIdentifier: ownerBundleIdentifier,
+                    widgetSpan: item.widgetSpan,
+                    hiddenWidgetOwnerBundleIdentifiers: []
+                )
+            case .smartStack:
+                return PinnedTileItem(
+                    id: item.id,
+                    kind: .smartStack,
+                    bundleIdentifier: nil,
+                    folderDisplayName: nil,
+                    folderBundleIdentifiers: [],
+                    widgetKind: nil,
+                    widgetOwnerBundleIdentifier: nil,
+                    widgetSpan: nil,
+                    hiddenWidgetOwnerBundleIdentifiers: item.hiddenWidgetOwnerBundleIdentifiers
+                )
+            case .spacer:
+                return PinnedTileItem(
+                    id: item.id,
+                    kind: .spacer,
+                    bundleIdentifier: nil,
+                    folderDisplayName: nil,
+                    folderBundleIdentifiers: [],
+                    widgetKind: nil,
+                    widgetOwnerBundleIdentifier: nil,
+                    widgetSpan: nil,
+                    hiddenWidgetOwnerBundleIdentifiers: []
+                )
+            case .divider:
+                return PinnedTileItem(
+                    id: item.id,
+                    kind: .divider,
+                    bundleIdentifier: nil,
+                    folderDisplayName: nil,
+                    folderBundleIdentifiers: [],
+                    widgetKind: nil,
+                    widgetOwnerBundleIdentifier: nil,
+                    widgetSpan: nil,
+                    hiddenWidgetOwnerBundleIdentifiers: []
+                )
+            case .folder, .trash:
+                return nil
+            }
+        case .none:
+            return nil
+        }
+    }
+
+    func makeTrailingItem(from tile: Tile) -> TrailingTileItem? {
+        switch itemScope(forTileID: tile.id) {
+        case .trailing(let item):
+            return item
+        case .pinned(let item):
+            switch item.kind {
+            case .widget:
+                guard let widgetKind = item.widgetKind,
+                      let ownerBundleIdentifier = item.widgetOwnerBundleIdentifier else {
+                    return nil
+                }
+                return TrailingTileItem(
+                    id: item.id,
+                    kind: .widget,
+                    sourceTileID: nil,
+                    widgetKind: widgetKind,
+                    widgetOwnerBundleIdentifier: ownerBundleIdentifier,
+                    widgetSpan: item.widgetSpan,
+                    hiddenWidgetOwnerBundleIdentifiers: []
+                )
+            case .smartStack:
+                return TrailingTileItem(
+                    id: item.id,
+                    kind: .smartStack,
+                    sourceTileID: nil,
+                    widgetKind: nil,
+                    widgetOwnerBundleIdentifier: nil,
+                    widgetSpan: nil,
+                    hiddenWidgetOwnerBundleIdentifiers: item.hiddenWidgetOwnerBundleIdentifiers
+                )
+            case .spacer:
+                return TrailingTileItem(
+                    id: item.id,
+                    kind: .spacer,
+                    sourceTileID: nil,
+                    widgetKind: nil,
+                    widgetOwnerBundleIdentifier: nil,
+                    widgetSpan: nil,
+                    hiddenWidgetOwnerBundleIdentifiers: []
+                )
+            case .divider:
+                return TrailingTileItem(
+                    id: item.id,
+                    kind: .divider,
+                    sourceTileID: nil,
+                    widgetKind: nil,
+                    widgetOwnerBundleIdentifier: nil,
+                    widgetSpan: nil,
+                    hiddenWidgetOwnerBundleIdentifiers: []
+                )
+            case .app, .appFolder:
+                return nil
+            }
+        case .none:
+            return nil
+        }
+    }
+
+    func smartStackWidgetCandidates(tileID: String) -> [WidgetTile] {
+        switch itemScope(forTileID: tileID) {
+        case .pinned(let item):
+            guard item.kind == .smartStack else {
+                return []
+            }
+            let hiddenOwnerBundleIdentifierSet = Set(item.hiddenWidgetOwnerBundleIdentifiers)
+            let visibleWidgets = allSmartStackWidgets().filter {
+                !hiddenOwnerBundleIdentifierSet.contains($0.ownerBundleIdentifier)
+            }
+            let hiddenWidgets = allSmartStackWidgets().filter {
+                hiddenOwnerBundleIdentifierSet.contains($0.ownerBundleIdentifier)
+            }
+            return visibleWidgets + hiddenWidgets
+        case .trailing(let item):
+            guard item.kind == .smartStack else {
+                return []
+            }
+            let hiddenOwnerBundleIdentifierSet = Set(item.hiddenWidgetOwnerBundleIdentifiers)
+            let visibleWidgets = allSmartStackWidgets().filter {
+                !hiddenOwnerBundleIdentifierSet.contains($0.ownerBundleIdentifier)
+            }
+            let hiddenWidgets = allSmartStackWidgets().filter {
+                hiddenOwnerBundleIdentifierSet.contains($0.ownerBundleIdentifier)
+            }
+            return visibleWidgets + hiddenWidgets
+        case .none:
+            return []
+        }
+    }
+
+    func isSmartStackWidgetVisible(tileID: String, ownerBundleIdentifier: String) -> Bool {
+        switch itemScope(forTileID: tileID) {
+        case .pinned(let item):
+            guard item.kind == .smartStack else {
+                return false
+            }
+            return !item.hiddenWidgetOwnerBundleIdentifiers.contains(ownerBundleIdentifier)
+        case .trailing(let item):
+            guard item.kind == .smartStack else {
+                return false
+            }
+            return !item.hiddenWidgetOwnerBundleIdentifiers.contains(ownerBundleIdentifier)
+        case .none:
+            return false
+        }
+    }
+
+    func setSmartStackWidgetVisibility(tileID: String, ownerBundleIdentifier: String, isVisible: Bool) {
+        if let itemIndex = preferences.pinnedItems.firstIndex(where: { Self.pinnedTileID(for: $0) == tileID }),
+           preferences.pinnedItems[itemIndex].kind == .smartStack {
+            var pinnedItems = preferences.pinnedItems
+            let existingItem = pinnedItems[itemIndex]
+            var hiddenOwnerBundleIdentifiers = Set(existingItem.hiddenWidgetOwnerBundleIdentifiers)
+            if isVisible {
+                hiddenOwnerBundleIdentifiers.remove(ownerBundleIdentifier)
+            } else {
+                hiddenOwnerBundleIdentifiers.insert(ownerBundleIdentifier)
+            }
+
+            pinnedItems[itemIndex] = PinnedTileItem(
+                id: existingItem.id,
+                kind: existingItem.kind,
+                bundleIdentifier: existingItem.bundleIdentifier,
+                folderDisplayName: existingItem.folderDisplayName,
+                folderBundleIdentifiers: existingItem.folderBundleIdentifiers,
+                widgetKind: existingItem.widgetKind,
+                widgetOwnerBundleIdentifier: existingItem.widgetOwnerBundleIdentifier,
+                widgetSpan: existingItem.widgetSpan,
+                hiddenWidgetOwnerBundleIdentifiers: hiddenOwnerBundleIdentifiers.sorted()
+            )
+            preferences.pinnedItems = pinnedItems
+            refreshPinnedTilesFromPreferences()
+            rebuildTiles()
+            return
+        }
+
+        guard let itemIndex = preferences.trailingItems.firstIndex(where: { Self.trailingTileID(for: $0) == tileID }),
+              preferences.trailingItems[itemIndex].kind == .smartStack else {
+            return
+        }
+
+        var trailingItems = preferences.trailingItems
+        let existingItem = trailingItems[itemIndex]
         var hiddenOwnerBundleIdentifiers = Set(existingItem.hiddenWidgetOwnerBundleIdentifiers)
         if isVisible {
             hiddenOwnerBundleIdentifiers.remove(ownerBundleIdentifier)
@@ -441,19 +662,17 @@ final class TileStore: ObservableObject {
             hiddenOwnerBundleIdentifiers.insert(ownerBundleIdentifier)
         }
 
-        pinnedItems[itemIndex] = PinnedTileItem(
+        trailingItems[itemIndex] = TrailingTileItem(
             id: existingItem.id,
             kind: existingItem.kind,
-            bundleIdentifier: existingItem.bundleIdentifier,
-            folderDisplayName: existingItem.folderDisplayName,
-            folderBundleIdentifiers: existingItem.folderBundleIdentifiers,
+            sourceTileID: existingItem.sourceTileID,
             widgetKind: existingItem.widgetKind,
             widgetOwnerBundleIdentifier: existingItem.widgetOwnerBundleIdentifier,
             widgetSpan: existingItem.widgetSpan,
             hiddenWidgetOwnerBundleIdentifiers: hiddenOwnerBundleIdentifiers.sorted()
         )
-        preferences.pinnedItems = pinnedItems
-        refreshPinnedTilesFromPreferences()
+        preferences.trailingItems = trailingItems
+        refreshTrailingTilesFromPreferences()
         rebuildTiles()
     }
 
@@ -485,6 +704,32 @@ final class TileStore: ObservableObject {
         rebuildTiles()
     }
 
+    func setTrailingWidgetSpan(tileID: String, span: TileSpan) {
+        guard let itemIndex = preferences.trailingItems.firstIndex(where: { Self.trailingTileID(for: $0) == tileID }),
+              preferences.trailingItems[itemIndex].kind == .widget else {
+            return
+        }
+
+        let existingItem = preferences.trailingItems[itemIndex]
+        guard existingItem.widgetSpan != span else {
+            return
+        }
+
+        var trailingItems = preferences.trailingItems
+        trailingItems[itemIndex] = TrailingTileItem(
+            id: existingItem.id,
+            kind: existingItem.kind,
+            sourceTileID: existingItem.sourceTileID,
+            widgetKind: existingItem.widgetKind,
+            widgetOwnerBundleIdentifier: existingItem.widgetOwnerBundleIdentifier,
+            widgetSpan: span,
+            hiddenWidgetOwnerBundleIdentifiers: existingItem.hiddenWidgetOwnerBundleIdentifiers
+        )
+        preferences.trailingItems = trailingItems
+        refreshTrailingTilesFromPreferences()
+        rebuildTiles()
+    }
+
     func removePinnedItem(tileID: String) {
         var pinnedItems = preferences.pinnedItems
         let originalCount = pinnedItems.count
@@ -494,6 +739,18 @@ final class TileStore: ObservableObject {
         }
         preferences.pinnedItems = pinnedItems
         refreshPinnedTilesFromPreferences()
+        rebuildTiles()
+    }
+
+    func removeTrailingItem(tileID: String) {
+        var trailingItems = preferences.trailingItems
+        let originalCount = trailingItems.count
+        trailingItems.removeAll { Self.trailingTileID(for: $0) == tileID }
+        guard trailingItems.count != originalCount else {
+            return
+        }
+        preferences.trailingItems = trailingItems
+        refreshTrailingTilesFromPreferences()
         rebuildTiles()
     }
 
@@ -521,6 +778,58 @@ final class TileStore: ObservableObject {
 
     private func refreshPinnedTilesFromPreferences() {
         pinnedTiles = preferences.pinnedItems.compactMap(tile(for:))
+    }
+
+    private func refreshTrailingPreferencesIfNeeded() {
+        let systemItems = systemOtherTiles.compactMap(Self.trailingItem(from:)) + [.trash()]
+        guard !systemItems.isEmpty else {
+            preferences.trailingItems = []
+            return
+        }
+
+        guard !preferences.trailingItems.isEmpty else {
+            preferences.trailingItems = systemItems
+            return
+        }
+
+        let availableFolderIDs = Set(systemOtherTiles.map(\.id))
+        var mergedItems: [TrailingTileItem] = preferences.trailingItems.filter { item in
+            switch item.kind {
+            case .folder:
+                guard let sourceTileID = item.sourceTileID else {
+                    return false
+                }
+                return availableFolderIDs.contains(sourceTileID)
+            case .trash, .widget, .smartStack, .spacer, .divider:
+                return true
+            }
+        }
+
+        let existingFolderIDs = Set(mergedItems.compactMap(\.sourceTileID))
+        let missingSystemItems = systemOtherTiles
+            .filter { !existingFolderIDs.contains($0.id) }
+            .compactMap(Self.trailingItem(from:))
+
+        if let trashIndex = mergedItems.firstIndex(where: { $0.kind == .trash }) {
+            mergedItems.insert(contentsOf: missingSystemItems, at: trashIndex)
+        } else {
+            mergedItems.append(contentsOf: missingSystemItems)
+            mergedItems.append(.trash())
+        }
+
+        if !mergedItems.contains(where: { $0.kind == .trash }) {
+            mergedItems.append(.trash())
+        }
+
+        guard mergedItems != preferences.trailingItems else {
+            return
+        }
+
+        preferences.trailingItems = mergedItems
+    }
+
+    private func refreshTrailingTilesFromPreferences() {
+        trailingTiles = preferences.trailingItems.compactMap(trailingTile(for:))
     }
 
     private func suggestAppFolderNameIfNeeded(folderID: String, expectedDisplayName: String, apps: [AppTile]) {
@@ -553,6 +862,25 @@ final class TileStore: ObservableObject {
 
     private func pinnedItem(forTileID tileID: String) -> PinnedTileItem? {
         preferences.pinnedItems.first { Self.pinnedTileID(for: $0) == tileID }
+    }
+
+    private func trailingItem(forTileID tileID: String) -> TrailingTileItem? {
+        preferences.trailingItems.first { Self.trailingTileID(for: $0) == tileID }
+    }
+
+    private enum ItemScope {
+        case pinned(PinnedTileItem)
+        case trailing(TrailingTileItem)
+    }
+
+    private func itemScope(forTileID tileID: String) -> ItemScope? {
+        if let item = pinnedItem(forTileID: tileID) {
+            return .pinned(item)
+        }
+        if let item = trailingItem(forTileID: tileID) {
+            return .trailing(item)
+        }
+        return nil
     }
 
     private func tile(for item: PinnedTileItem) -> Tile? {
@@ -606,6 +934,45 @@ final class TileStore: ObservableObject {
         }
     }
 
+    private func trailingTile(for item: TrailingTileItem) -> Tile? {
+        switch item.kind {
+        case .folder:
+            guard let sourceTileID = item.sourceTileID,
+                  let tile = systemOtherTilesByID[sourceTileID],
+                  case .folder(let folder) = tile.content else {
+                return nil
+            }
+            return Tile(id: Self.trailingTileID(for: item), content: .folder(folder))
+        case .trash:
+            return Tile(id: Self.trailingTileID(for: item), content: .trash)
+        case .widget:
+            guard let widgetKind = item.widgetKind,
+                  let ownerBundleIdentifier = item.widgetOwnerBundleIdentifier else {
+                return nil
+            }
+            return Tile(
+                id: Self.trailingTileID(for: item),
+                content: .widget(Self.makeWidgetTile(
+                    kind: widgetKind,
+                    ownerBundleIdentifier: ownerBundleIdentifier,
+                    span: item.widgetSpan ?? .three
+                ))
+            )
+        case .smartStack:
+            return Tile(
+                id: Self.trailingTileID(for: item),
+                content: .smartStack(Self.makeSmartStackTile(
+                    identifier: item.id,
+                    widgets: visibleSmartStackWidgets(hiddenOwnerBundleIdentifiers: item.hiddenWidgetOwnerBundleIdentifiers)
+                ))
+            )
+        case .spacer:
+            return Tile(id: Self.trailingTileID(for: item), content: .spacer)
+        case .divider:
+            return Tile(id: Self.trailingTileID(for: item), content: .divider)
+        }
+    }
+
     private func rebuildTiles() {
         let pinnedWithoutFinder = pinnedTiles.filter { !Self.isFinder($0) }
         let pinnedBundleIDs = Self.bundleIdentifiers(in: pinnedWithoutFinder)
@@ -627,8 +994,7 @@ final class TileStore: ObservableObject {
         }
         result.append(contentsOf: tilesWithWidgets(appendedTo: runningTiles))
         result.append(Tile(id: "divider:trailing", content: .divider))
-        result.append(contentsOf: otherTiles)
-        result.append(Tile(id: "trash", content: .trash))
+        result.append(contentsOf: trailingTiles)
         tiles = result
     }
 
@@ -819,9 +1185,24 @@ final class TileStore: ObservableObject {
         "pinned:\(item.id)"
     }
 
+    private static func trailingTileID(for item: TrailingTileItem) -> String {
+        "trailing:\(item.id)"
+    }
+
+    nonisolated private static func trailingItem(from tile: Tile) -> TrailingTileItem? {
+        switch tile.content {
+        case .folder:
+            return .folder(sourceTileID: tile.id)
+        case .trash:
+            return .trash()
+        case .widget, .smartStack, .app, .appFolder, .spacer, .divider:
+            return nil
+        }
+    }
+
     private func normalizeAppFolderDisplayName(_ value: String) -> String {
         let normalized = value
-            .split(whereSeparator: \ .isWhitespace)
+            .split(whereSeparator: \.isWhitespace)
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return normalized.isEmpty ? "Folder" : normalized

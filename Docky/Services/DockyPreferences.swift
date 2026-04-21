@@ -22,6 +22,15 @@ enum PinnedTileItemKind: String, Codable, Equatable {
     case divider
 }
 
+enum TrailingTileItemKind: String, Codable, Equatable {
+    case folder
+    case trash
+    case widget
+    case smartStack
+    case spacer
+    case divider
+}
+
 struct PinnedTileItem: Codable, Equatable, Identifiable {
     let id: String
     let kind: PinnedTileItemKind
@@ -114,6 +123,88 @@ struct PinnedTileItem: Codable, Equatable, Identifiable {
             bundleIdentifier: nil,
             folderDisplayName: nil,
             folderBundleIdentifiers: [],
+            widgetKind: nil,
+            widgetOwnerBundleIdentifier: nil,
+            widgetSpan: nil,
+            hiddenWidgetOwnerBundleIdentifiers: []
+        )
+    }
+}
+
+struct TrailingTileItem: Codable, Equatable, Identifiable {
+    let id: String
+    let kind: TrailingTileItemKind
+    let sourceTileID: String?
+    let widgetKind: WidgetKind?
+    let widgetOwnerBundleIdentifier: String?
+    let widgetSpan: TileSpan?
+    let hiddenWidgetOwnerBundleIdentifiers: [String]
+
+    nonisolated static func folder(sourceTileID: String) -> Self {
+        Self(
+            id: "folder:\(sourceTileID)",
+            kind: .folder,
+            sourceTileID: sourceTileID,
+            widgetKind: nil,
+            widgetOwnerBundleIdentifier: nil,
+            widgetSpan: nil,
+            hiddenWidgetOwnerBundleIdentifiers: []
+        )
+    }
+
+    nonisolated static func trash() -> Self {
+        Self(
+            id: "trash",
+            kind: .trash,
+            sourceTileID: nil,
+            widgetKind: nil,
+            widgetOwnerBundleIdentifier: nil,
+            widgetSpan: nil,
+            hiddenWidgetOwnerBundleIdentifiers: []
+        )
+    }
+
+    nonisolated static func widget(kind: WidgetKind, ownerBundleIdentifier: String, span: TileSpan = .three) -> Self {
+        Self(
+            id: "custom:\(UUID().uuidString)",
+            kind: .widget,
+            sourceTileID: nil,
+            widgetKind: kind,
+            widgetOwnerBundleIdentifier: ownerBundleIdentifier,
+            widgetSpan: span,
+            hiddenWidgetOwnerBundleIdentifiers: []
+        )
+    }
+
+    nonisolated static func smartStack(hiddenWidgetOwnerBundleIdentifiers: [String] = []) -> Self {
+        Self(
+            id: "custom:\(UUID().uuidString)",
+            kind: .smartStack,
+            sourceTileID: nil,
+            widgetKind: nil,
+            widgetOwnerBundleIdentifier: nil,
+            widgetSpan: nil,
+            hiddenWidgetOwnerBundleIdentifiers: hiddenWidgetOwnerBundleIdentifiers
+        )
+    }
+
+    nonisolated static func spacer() -> Self {
+        Self(
+            id: "custom:\(UUID().uuidString)",
+            kind: .spacer,
+            sourceTileID: nil,
+            widgetKind: nil,
+            widgetOwnerBundleIdentifier: nil,
+            widgetSpan: nil,
+            hiddenWidgetOwnerBundleIdentifiers: []
+        )
+    }
+
+    nonisolated static func divider() -> Self {
+        Self(
+            id: "custom:\(UUID().uuidString)",
+            kind: .divider,
+            sourceTileID: nil,
             widgetKind: nil,
             widgetOwnerBundleIdentifier: nil,
             widgetSpan: nil,
@@ -270,6 +361,14 @@ final class DockyPreferences: ObservableObject {
         }
     }
 
+    /// Docky-owned ordered folder/trash section items.
+    @Published var trailingItems: [TrailingTileItem] {
+        didSet {
+            guard trailingItems != oldValue else { return }
+            persistTrailingItems(trailingItems)
+        }
+    }
+
     private let defaults: UserDefaults
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -284,6 +383,7 @@ final class DockyPreferences: ObservableObject {
         static let pinnedAppBundleIdentifiers = "docky.pinnedAppBundleIdentifiers"
         static let pinnedItems = "docky.pinnedItems"
         static let widgetPlacements = "docky.widgetPlacements"
+        static let trailingItems = "docky.trailingItems"
     }
 
     private enum DefaultValues {
@@ -296,6 +396,7 @@ final class DockyPreferences: ObservableObject {
         static let pinnedAppBundleIdentifiers: [String] = []
         static let pinnedItems: [PinnedTileItem] = []
         static let widgetPlacements: [WidgetPlacement] = []
+        static let trailingItems: [TrailingTileItem] = []
     }
 
     private init() {
@@ -309,6 +410,7 @@ final class DockyPreferences: ObservableObject {
         let storedPinnedAppBundleIdentifiers = defaults.stringArray(forKey: Keys.pinnedAppBundleIdentifiers)
         let storedPinnedItems = defaults.data(forKey: Keys.pinnedItems)
         let storedWidgetPlacements = defaults.data(forKey: Keys.widgetPlacements)
+        let storedTrailingItems = defaults.data(forKey: Keys.trailingItems)
         let initialPinnedAppBundleIdentifiers = storedPinnedAppBundleIdentifiers ?? DefaultValues.pinnedAppBundleIdentifiers
         let initialPinnedItems = Self.decodePinnedItems(from: storedPinnedItems)
             ?? initialPinnedAppBundleIdentifiers.map(PinnedTileItem.app(bundleIdentifier:))
@@ -321,6 +423,7 @@ final class DockyPreferences: ObservableObject {
         self.pinnedAppBundleIdentifiers = initialPinnedAppBundleIdentifiers
         self.pinnedItems = initialPinnedItems
         self.widgetPlacements = Self.decodeWidgetPlacements(from: storedWidgetPlacements) ?? DefaultValues.widgetPlacements
+        self.trailingItems = Self.decodeTrailingItems(from: storedTrailingItems) ?? DefaultValues.trailingItems
     }
 
     func resetToDefaults() {
@@ -333,6 +436,7 @@ final class DockyPreferences: ObservableObject {
         pinnedAppBundleIdentifiers = DefaultValues.pinnedAppBundleIdentifiers
         pinnedItems = DefaultValues.pinnedItems
         widgetPlacements = DefaultValues.widgetPlacements
+        trailingItems = DefaultValues.trailingItems
     }
 
     private func persistPinnedItems(_ items: [PinnedTileItem]) {
@@ -353,6 +457,15 @@ final class DockyPreferences: ObservableObject {
         defaults.set(data, forKey: Keys.widgetPlacements)
     }
 
+    private func persistTrailingItems(_ items: [TrailingTileItem]) {
+        guard let data = try? encoder.encode(items) else {
+            defaults.removeObject(forKey: Keys.trailingItems)
+            return
+        }
+
+        defaults.set(data, forKey: Keys.trailingItems)
+    }
+
     private static func decodeWidgetPlacements(from data: Data?) -> [WidgetPlacement]? {
         guard let data else {
             return nil
@@ -367,5 +480,13 @@ final class DockyPreferences: ObservableObject {
         }
 
         return try? JSONDecoder().decode([PinnedTileItem].self, from: data)
+    }
+
+    private static func decodeTrailingItems(from data: Data?) -> [TrailingTileItem]? {
+        guard let data else {
+            return nil
+        }
+
+        return try? JSONDecoder().decode([TrailingTileItem].self, from: data)
     }
 }

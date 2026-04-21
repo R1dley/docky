@@ -19,6 +19,7 @@ struct TileContainerView: View {
     @State private var draggedTileOffset: CGFloat = 0
     @State private var draggedTileInitialFrame: CGRect?
     @State private var draggedPinnedTileDestinationIndex: Int?
+    @State private var draggedTrailingTileDestinationIndex: Int?
     @State private var draggedAppFolderTargetTileID: String?
     @State private var tileFrames: [String: CGRect] = [:]
 
@@ -45,7 +46,7 @@ struct TileContainerView: View {
             .onPreferenceChange(TileFramePreferenceKey.self) { tileFrames = $0 }
             .onChange(of: editMode.paletteDrag) { _, paletteDrag in
                 guard paletteDrag != nil else {
-                    editMode.paletteDropDestinationIndex = nil
+                    editMode.paletteDropDestination = nil
                     return
                 }
             }
@@ -62,17 +63,25 @@ struct TileContainerView: View {
                 },
                 performInsert: {
                     guard let paletteItem = editMode.paletteDrag?.item,
-                          let destinationIndex = editMode.paletteDropDestinationIndex else {
+                          let destination = editMode.paletteDropDestination else {
                         editMode.endPaletteDrag()
                         return false
                     }
 
-                    guard let pinnedItem = makePinnedItem(from: paletteItem) else {
-                        editMode.endPaletteDrag()
-                        return false
+                    switch destination.section {
+                    case .pinned:
+                        guard let pinnedItem = makePinnedItem(from: paletteItem) else {
+                            editMode.endPaletteDrag()
+                            return false
+                        }
+                        TileStore.shared.insertPinnedItem(pinnedItem, at: destination.index)
+                    case .trailing:
+                        guard let trailingItem = makeTrailingItem(from: paletteItem) else {
+                            editMode.endPaletteDrag()
+                            return false
+                        }
+                        TileStore.shared.insertTrailingItem(trailingItem, at: destination.index)
                     }
-
-                    TileStore.shared.insertPinnedItem(pinnedItem, at: destinationIndex)
                     editMode.endPaletteDrag()
                     return true
                 }
@@ -135,7 +144,15 @@ struct TileContainerView: View {
         result.append(contentsOf: previewPinnedTiles)
 
         for tile in store.tiles.dropFirst() {
-            if isPinnedReorderable(tileID: tile.id) || shouldHideDraggedOriginalTile(tileID: tile.id) {
+            if tile.id == "divider:trailing" {
+                result.append(tile)
+                result.append(contentsOf: previewTrailingTiles)
+                continue
+            }
+
+            if isPinnedReorderable(tileID: tile.id)
+                || isTrailingReorderable(tileID: tile.id)
+                || shouldHideDraggedOriginalTile(tileID: tile.id) {
                 continue
             }
             result.append(tile)
@@ -152,6 +169,14 @@ struct TileContainerView: View {
         pinnedTiles.map(\.id)
     }
 
+    private var trailingTiles: [Tile] {
+        store.tiles.filter { isTrailingReorderable(tileID: $0.id) }
+    }
+
+    private var trailingTileIDs: [String] {
+        trailingTiles.map(\.id)
+    }
+
     private var previewPinnedTiles: [Tile] {
         guard let destinationIndex = activePinnedDropDestinationIndex else {
             return pinnedTiles
@@ -162,7 +187,7 @@ struct TileContainerView: View {
             remainingPinnedTiles.removeAll { $0.id == draggedTileID }
         }
         let clampedDestinationIndex = min(max(destinationIndex, 0), remainingPinnedTiles.count)
-        if let draggedTile {
+        if let draggedTile, (isDraggingPinnedTile || store.makePinnedItem(from: draggedTile) != nil) {
             remainingPinnedTiles.insert(draggedTile, at: clampedDestinationIndex)
         } else if let palettePreviewTile {
             remainingPinnedTiles.insert(palettePreviewTile, at: clampedDestinationIndex)
@@ -204,6 +229,24 @@ struct TileContainerView: View {
         }
     }
 
+    private var previewTrailingTiles: [Tile] {
+        guard let destinationIndex = activeTrailingDropDestinationIndex else {
+            return trailingTiles
+        }
+
+        var remainingTrailingTiles = trailingTiles
+        if let draggedTileID {
+            remainingTrailingTiles.removeAll { $0.id == draggedTileID }
+        }
+        let clampedDestinationIndex = min(max(destinationIndex, 0), remainingTrailingTiles.count)
+        if let draggedTile, store.makeTrailingItem(from: draggedTile) != nil {
+            remainingTrailingTiles.insert(draggedTile, at: clampedDestinationIndex)
+        } else if let palettePreviewTile, makeTrailingItem(from: editMode.paletteDrag?.item) != nil {
+            remainingTrailingTiles.insert(palettePreviewTile, at: clampedDestinationIndex)
+        }
+        return remainingTrailingTiles
+    }
+
     private var draggedTile: Tile? {
         guard let draggedTileID else {
             return nil
@@ -221,7 +264,23 @@ struct TileContainerView: View {
     }
 
     private var activePinnedDropDestinationIndex: Int? {
-        draggedTileID == nil ? editMode.paletteDropDestinationIndex : draggedPinnedTileDestinationIndex
+        if draggedTileID == nil {
+            guard editMode.paletteDropDestination?.section == .pinned else {
+                return nil
+            }
+            return editMode.paletteDropDestination?.index
+        }
+        return draggedPinnedTileDestinationIndex
+    }
+
+    private var activeTrailingDropDestinationIndex: Int? {
+        if draggedTileID == nil {
+            guard editMode.paletteDropDestination?.section == .trailing else {
+                return nil
+            }
+            return editMode.paletteDropDestination?.index
+        }
+        return draggedTrailingTileDestinationIndex
     }
 
     private var tileTransition: AnyTransition {
@@ -257,27 +316,55 @@ struct TileContainerView: View {
         store.isPinnedReorderable(tileID: tileID)
     }
 
+    private func isTrailingReorderable(tileID: String) -> Bool {
+        store.isTrailingReorderable(tileID: tileID)
+    }
+
     private func isTileDraggable(_ tile: Tile) -> Bool {
         switch tile.content {
         case .app(let app):
             return !app.bundleIdentifier.isEmpty && app.bundleIdentifier != "com.apple.finder"
         case .appFolder, .widget, .smartStack, .spacer, .divider:
-            return editMode.isActive && isPinnedReorderable(tileID: tile.id)
+            return editMode.isActive && (isPinnedReorderable(tileID: tile.id) || isTrailingReorderable(tileID: tile.id))
         case .folder, .trash:
-            return false
+            return editMode.isActive && isTrailingReorderable(tileID: tile.id)
         }
     }
 
     private func makePinnedItem(from paletteItem: DockEditPaletteItem) -> PinnedTileItem? {
-        switch paletteItem {
+        return switch paletteItem {
         case .spacer:
-            .spacer()
+            PinnedTileItem.spacer()
         case .divider:
-            .divider()
+            PinnedTileItem.divider()
         case .widget(let ownerBundleIdentifier, let kind):
-            .widget(kind: kind, ownerBundleIdentifier: ownerBundleIdentifier)
+            PinnedTileItem.widget(kind: kind, ownerBundleIdentifier: ownerBundleIdentifier)
         case .smartStack:
-            .smartStack()
+            PinnedTileItem.smartStack()
+        }
+    }
+
+    private func makePinnedItem(from paletteItem: DockEditPaletteItem?) -> PinnedTileItem? {
+        guard let paletteItem else {
+            return nil
+        }
+        return makePinnedItem(from: paletteItem)
+    }
+
+    private func makeTrailingItem(from paletteItem: DockEditPaletteItem?) -> TrailingTileItem? {
+        guard let paletteItem else {
+            return nil
+        }
+
+        return switch paletteItem {
+        case .spacer:
+            TrailingTileItem.spacer()
+        case .divider:
+            TrailingTileItem.divider()
+        case .widget(let ownerBundleIdentifier, let kind):
+            TrailingTileItem.widget(kind: kind, ownerBundleIdentifier: ownerBundleIdentifier)
+        case .smartStack:
+            TrailingTileItem.smartStack()
         }
     }
 
@@ -288,11 +375,27 @@ struct TileContainerView: View {
         return isPinnedReorderable(tileID: draggedTileID)
     }
 
+    private var isDraggingTrailingTile: Bool {
+        guard let draggedTileID else {
+            return false
+        }
+        return isTrailingReorderable(tileID: draggedTileID)
+    }
+
     private func shouldHideDraggedOriginalTile(tileID: String) -> Bool {
         guard tileID == draggedTileID else {
             return false
         }
-        return !isDraggingPinnedTile && draggedPinnedTileDestinationIndex != nil
+        return (!isDraggingPinnedTile && draggedPinnedTileDestinationIndex != nil)
+            || (!isDraggingTrailingTile && draggedTrailingTileDestinationIndex != nil)
+    }
+
+    private func canDropInPinnedSection(_ tile: Tile) -> Bool {
+        isPinnedReorderable(tileID: tile.id) || store.makePinnedItem(from: tile) != nil || bundleIdentifier(for: tile) != nil
+    }
+
+    private func canDropInTrailingSection(_ tile: Tile) -> Bool {
+        isTrailingReorderable(tileID: tile.id) || store.makeTrailingItem(from: tile) != nil
     }
 
     private func reorderGesture(for tile: Tile) -> some Gesture {
@@ -314,6 +417,7 @@ struct TileContainerView: View {
             draggedTileID = tile.id
             draggedTileInitialFrame = tileFrames[tile.id]
             draggedPinnedTileDestinationIndex = isPinnedReorderable(tileID: tile.id) ? pinnedTileIDs.firstIndex(of: tile.id) : nil
+            draggedTrailingTileDestinationIndex = isTrailingReorderable(tileID: tile.id) ? trailingTileIDs.firstIndex(of: tile.id) : nil
         }
 
         guard draggedTileID == tile.id else {
@@ -327,10 +431,11 @@ struct TileContainerView: View {
                at: value.location,
                sourceTileID: tile.id,
                bundleIdentifier: bundleIdentifier
-           ) {
+            ) {
             draggedAppFolderTargetTileID = groupTargetTileID
             draggedPinnedTileDestinationIndex = nil
-            editMode.paletteDropDestinationIndex = nil
+            draggedTrailingTileDestinationIndex = nil
+            editMode.paletteDropDestination = nil
             return
         }
 
@@ -338,7 +443,10 @@ struct TileContainerView: View {
         updatePreviewDestination(
             at: projected(point: value.location),
             sourceTileID: tile.id,
-            isPinnedSource: isPinnedReorderable(tileID: tile.id)
+            isPinnedSource: isPinnedReorderable(tileID: tile.id),
+            isTrailingSource: isTrailingReorderable(tileID: tile.id),
+            canDropIntoPinned: canDropInPinnedSection(tile),
+            canDropIntoTrailing: canDropInTrailingSection(tile)
         )
     }
 
@@ -354,9 +462,26 @@ struct TileContainerView: View {
            let bundleIdentifier = draggedBundleIdentifier {
             _ = store.groupApp(bundleIdentifier: bundleIdentifier, intoTileID: groupTargetTileID)
         } else if isPinnedReorderable(tileID: tile.id) {
-            let finalPinnedTileIDs = previewPinnedTiles.map(\.id)
-            if finalPinnedTileIDs != pinnedTileIDs {
-                store.setPinnedTileOrder(ids: finalPinnedTileIDs)
+            if let destinationIndex = draggedTrailingTileDestinationIndex,
+               let trailingItem = draggedTile.flatMap(store.makeTrailingItem(from:)) {
+                store.removePinnedItem(tileID: tile.id)
+                store.insertTrailingItem(trailingItem, at: destinationIndex)
+            } else {
+                let finalPinnedTileIDs = previewPinnedTiles.map(\.id)
+                if finalPinnedTileIDs != pinnedTileIDs {
+                    store.setPinnedTileOrder(ids: finalPinnedTileIDs)
+                }
+            }
+        } else if isTrailingReorderable(tileID: tile.id) {
+            if let destinationIndex = draggedPinnedTileDestinationIndex,
+               let pinnedItem = draggedTile.flatMap(store.makePinnedItem(from:)) {
+                store.removeTrailingItem(tileID: tile.id)
+                store.insertPinnedItem(pinnedItem, at: destinationIndex)
+            } else {
+                let finalTrailingTileIDs = previewTrailingTiles.map(\.id)
+                if finalTrailingTileIDs != trailingTileIDs {
+                    store.setTrailingTileOrder(ids: finalTrailingTileIDs)
+                }
             }
         } else if let destinationIndex = draggedPinnedTileDestinationIndex,
                   let bundleIdentifier = draggedBundleIdentifier {
@@ -375,58 +500,79 @@ struct TileContainerView: View {
         return app.bundleIdentifier
     }
 
-    private func updatePreviewDestination(at positionValue: CGFloat, sourceTileID: String, isPinnedSource: Bool) {
-        guard isPointInPinnedDropRegion(positionValue) || isPinnedSource else {
+    private func updatePreviewDestination(
+        at positionValue: CGFloat,
+        sourceTileID: String,
+        isPinnedSource: Bool,
+        isTrailingSource: Bool,
+        canDropIntoPinned: Bool,
+        canDropIntoTrailing: Bool
+    ) {
+        if canDropIntoPinned && isPointInPinnedDropRegion(positionValue) {
+            updateDropDestination(for: .pinned, at: positionValue, sourceTileID: sourceTileID, isSectionSource: isPinnedSource)
+            if isTrailingSource {
+                draggedTrailingTileDestinationIndex = nil
+            }
+            return
+        }
+
+        if canDropIntoTrailing && isPointInTrailingDropRegion(positionValue) {
+            updateDropDestination(for: .trailing, at: positionValue, sourceTileID: sourceTileID, isSectionSource: isTrailingSource)
             if isPinnedSource {
                 draggedPinnedTileDestinationIndex = nil
-            } else {
-                editMode.paletteDropDestinationIndex = nil
             }
             return
         }
 
-        let visiblePinnedTiles = previewPinnedTiles.filter { $0.id != sourceTileID }
-        guard !visiblePinnedTiles.isEmpty else {
-            if isPinnedSource {
-                draggedPinnedTileDestinationIndex = 0
-            } else {
-                editMode.paletteDropDestinationIndex = 0
-            }
-            return
+        if isPinnedSource {
+            draggedPinnedTileDestinationIndex = nil
         }
+        if isTrailingSource {
+            draggedTrailingTileDestinationIndex = nil
+        }
+        if !isPinnedSource && !isTrailingSource {
+            editMode.paletteDropDestination = nil
+        }
+    }
 
-        let destinationIndex = visiblePinnedTiles.enumerated().first { _, tile in
+    private func updateDropDestination(
+        for section: DockEditDropSection,
+        at positionValue: CGFloat,
+        sourceTileID: String,
+        isSectionSource: Bool
+    ) {
+        let visibleTiles = previewTiles(for: section).filter { $0.id != sourceTileID }
+        let destinationIndex = visibleTiles.enumerated().first { _, tile in
             guard let frame = tileFrames[tile.id] else {
                 return false
             }
             let midpoint = projected(point: frame.origin) + projected(size: frame.size) / 2
             return positionValue < midpoint
-        }?.offset ?? visiblePinnedTiles.count
+        }?.offset ?? visibleTiles.count
 
-        let currentDestinationIndex = isPinnedSource ? draggedPinnedTileDestinationIndex : editMode.paletteDropDestinationIndex
+        let currentDestinationIndex = currentDropDestinationIndex(for: section, isSectionSource: isSectionSource)
         guard currentDestinationIndex != destinationIndex else {
             return
         }
 
         withAnimation(tileMutationAnimation) {
-            if isPinnedSource {
-                draggedPinnedTileDestinationIndex = destinationIndex
-            } else {
-                editMode.paletteDropDestinationIndex = destinationIndex
-            }
+            setDropDestination(section: section, index: destinationIndex, isSectionSource: isSectionSource)
         }
     }
 
     private func updatePalettePreviewDestination(at location: CGPoint) {
         guard let palettePreviewTile else {
-            editMode.paletteDropDestinationIndex = nil
+            editMode.paletteDropDestination = nil
             return
         }
 
         updatePreviewDestination(
             at: projected(point: location),
             sourceTileID: palettePreviewTile.id,
-            isPinnedSource: false
+            isPinnedSource: false,
+            isTrailingSource: false,
+            canDropIntoPinned: makePinnedItem(from: editMode.paletteDrag?.item) != nil,
+            canDropIntoTrailing: makeTrailingItem(from: editMode.paletteDrag?.item) != nil
         )
     }
 
@@ -445,11 +591,65 @@ struct TileContainerView: View {
         tileFrames.keys.contains("divider:running") ? "divider:running" : "divider:trailing"
     }
 
+    private func isPointInTrailingDropRegion(_ positionValue: CGFloat) -> Bool {
+        guard let dividerFrame = tileFrames["divider:trailing"],
+              let lastTrailingTileID = previewTrailingTiles.last?.id,
+              let trailingBoundaryFrame = tileFrames[lastTrailingTileID] else {
+            return false
+        }
+
+        let lowerBound = projected(point: dividerFrame.origin) + projected(size: dividerFrame.size)
+        let upperBound = projected(point: trailingBoundaryFrame.origin) + projected(size: trailingBoundaryFrame.size)
+        return positionValue >= lowerBound && positionValue <= upperBound
+    }
+
+    private func previewTiles(for section: DockEditDropSection) -> [Tile] {
+        switch section {
+        case .pinned:
+            previewPinnedTiles
+        case .trailing:
+            previewTrailingTiles
+        }
+    }
+
+    private func currentDropDestinationIndex(for section: DockEditDropSection, isSectionSource: Bool) -> Int? {
+        if isSectionSource {
+            return switch section {
+            case .pinned: draggedPinnedTileDestinationIndex
+            case .trailing: draggedTrailingTileDestinationIndex
+            }
+        }
+
+        guard editMode.paletteDropDestination?.section == section else {
+            return nil
+        }
+        return editMode.paletteDropDestination?.index
+    }
+
+    private func setDropDestination(section: DockEditDropSection, index: Int?, isSectionSource: Bool) {
+        if isSectionSource {
+            switch section {
+            case .pinned:
+                draggedPinnedTileDestinationIndex = index
+            case .trailing:
+                draggedTrailingTileDestinationIndex = index
+            }
+            return
+        }
+
+        if let index {
+            editMode.paletteDropDestination = DockEditDropDestination(section: section, index: index)
+        } else {
+            editMode.paletteDropDestination = nil
+        }
+    }
+
     private func clearDragState() {
         draggedTileID = nil
         draggedTileOffset = 0
         draggedTileInitialFrame = nil
         draggedPinnedTileDestinationIndex = nil
+        draggedTrailingTileDestinationIndex = nil
         draggedAppFolderTargetTileID = nil
     }
 
