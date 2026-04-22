@@ -132,6 +132,7 @@ struct WeatherWidgetTileView: View {
                 ProgressView()
                     .controlSize(.small)
                     .tint(.white.opacity(0.9))
+                    .foregroundStyle(.white.opacity(0.9))
             } else {
                 Image(systemName: placeholderSymbolName)
                     .font(.system(size: layout.symbolSize, weight: .semibold))
