@@ -718,11 +718,16 @@ struct TileView: View {
     private func widgetContextActions(for widget: WidgetTile) -> [ContextAction] {
         switch widget.kind {
         case .nowPlaying:
-            var actions: [ContextAction] = [
-                .action("Open App") {
-                    WorkspaceService.shared.activateOrOpen(bundleIdentifier: widget.ownerBundleIdentifier)
-                },
-                .divider,
+            var actions: [ContextAction] = []
+
+            if let bundleIdentifier = mediaPlayback.resolvedBundleIdentifier(for: widget.ownerBundleIdentifier) {
+                actions.append(.action("Open App") {
+                    WorkspaceService.shared.activateOrOpen(bundleIdentifier: bundleIdentifier)
+                })
+                actions.append(.divider)
+            }
+
+            actions.append(contentsOf: [
                 .action("Play/Pause") {
                     Task {
                         await mediaPlayback.togglePlayPause(for: widget.ownerBundleIdentifier)
@@ -738,7 +743,7 @@ struct TileView: View {
                         await mediaPlayback.skipToNext(for: widget.ownerBundleIdentifier)
                     }
                 },
-            ]
+            ])
 
             if let playbackState = mediaPlayback.state(for: widget.ownerBundleIdentifier), playbackState.supportsFavorite {
                 actions.append(.action(playbackState.isFavorite ? "Unfavorite" : "Favorite") {

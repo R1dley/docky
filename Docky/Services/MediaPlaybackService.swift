@@ -42,6 +42,7 @@ struct MediaPlaybackState: Equatable {
 
 final class MediaPlaybackService: ObservableObject {
     static let shared = MediaPlaybackService()
+    static let genericNowPlayingOwnerBundleIdentifier = "gt.quintero.Docky.now-playing"
 
     @Published private(set) var statesByBundleIdentifier: [String: MediaPlaybackState] = [:]
 
@@ -65,11 +66,25 @@ final class MediaPlaybackService: ObservableObject {
     }
 
     func supportsWidget(bundleIdentifier: String) -> Bool {
-        !bundleIdentifier.isEmpty
+        if bundleIdentifier == Self.genericNowPlayingOwnerBundleIdentifier {
+            return true
+        }
+
+        return !bundleIdentifier.isEmpty
     }
 
     func state(for bundleIdentifier: String) -> MediaPlaybackState? {
-        statesByBundleIdentifier[bundleIdentifier]
+        if bundleIdentifier == Self.genericNowPlayingOwnerBundleIdentifier {
+            return currentState
+        }
+
+        return statesByBundleIdentifier[bundleIdentifier]
+    }
+
+    var currentState: MediaPlaybackState? {
+        statesByBundleIdentifier.values
+            .filter(\ .hasContent)
+            .max { lhs, rhs in lhs.lastUpdated < rhs.lastUpdated }
     }
 
     func refresh() {
@@ -77,14 +92,16 @@ final class MediaPlaybackService: ObservableObject {
     }
 
     func togglePlayPause(for bundleIdentifier: String) async {
-        guard let currentState = state(for: bundleIdentifier), currentState.hasContent else {
+        guard let resolvedBundleIdentifier = resolvedBundleIdentifier(for: bundleIdentifier),
+              let currentState = state(for: resolvedBundleIdentifier),
+              currentState.hasContent else {
             return
         }
 
         var updatedState = currentState
         updatedState.isPlaying.toggle()
         updatedState.lastUpdated = Date()
-        statesByBundleIdentifier[bundleIdentifier] = updatedState
+        statesByBundleIdentifier[resolvedBundleIdentifier] = updatedState
 
         mediaRemote.sendCommand(.togglePlayPause)
         try? await Task.sleep(for: .milliseconds(120))
@@ -92,7 +109,8 @@ final class MediaPlaybackService: ObservableObject {
     }
 
     func skipToNext(for bundleIdentifier: String) async {
-        guard state(for: bundleIdentifier)?.hasContent == true else {
+        guard let resolvedBundleIdentifier = resolvedBundleIdentifier(for: bundleIdentifier),
+              state(for: resolvedBundleIdentifier)?.hasContent == true else {
             return
         }
 
@@ -102,7 +120,8 @@ final class MediaPlaybackService: ObservableObject {
     }
 
     func skipToPrevious(for bundleIdentifier: String) async {
-        guard state(for: bundleIdentifier)?.hasContent == true else {
+        guard let resolvedBundleIdentifier = resolvedBundleIdentifier(for: bundleIdentifier),
+              state(for: resolvedBundleIdentifier)?.hasContent == true else {
             return
         }
 
@@ -112,7 +131,8 @@ final class MediaPlaybackService: ObservableObject {
     }
 
     func setFavorite(_ favorite: Bool, for bundleIdentifier: String) async {
-        guard bundleIdentifier == "com.apple.Music" else {
+        guard let resolvedBundleIdentifier = resolvedBundleIdentifier(for: bundleIdentifier),
+              resolvedBundleIdentifier == "com.apple.Music" else {
             return
         }
 
@@ -129,6 +149,14 @@ final class MediaPlaybackService: ObservableObject {
         _ = try? AppleScriptService.shared.executeDescriptor(source: source)
         try? await Task.sleep(for: .milliseconds(120))
         refresh()
+    }
+
+    func resolvedBundleIdentifier(for bundleIdentifier: String) -> String? {
+        if bundleIdentifier == Self.genericNowPlayingOwnerBundleIdentifier {
+            return currentState?.bundleIdentifier
+        }
+
+        return bundleIdentifier.isEmpty ? nil : bundleIdentifier
     }
 
     private func apply(_ state: MediaPlaybackState?) {

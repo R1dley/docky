@@ -95,10 +95,12 @@ struct NowPlayingWidgetTileView: View {
                     .foregroundStyle(primaryForegroundColor)
                     .lineLimit(1)
 
-                Text(playbackArtist)
-                    .font(.system(size: layout.subtitleFontSize))
-                    .foregroundStyle(secondaryForegroundColor)
-                    .lineLimit(1)
+                if playbackArtist.isEmpty == false {
+                    Text(playbackArtist)
+                        .font(.system(size: layout.subtitleFontSize))
+                        .foregroundStyle(secondaryForegroundColor)
+                        .lineLimit(1)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -216,12 +218,12 @@ struct NowPlayingWidgetTileView: View {
         playbackState?.displayName
             ?? (NSWorkspace.shared.urlForApplication(withBundleIdentifier: tile.ownerBundleIdentifier).map {
                 FileManager.default.displayName(atPath: $0.path)
-            } ?? tile.title)
+            } ?? "")
     }
 
     private var playbackTitle: String {
         guard let playbackState, playbackState.hasContent else {
-            return tile.title
+            return "Not Playing"
         }
 
         return playbackState.title.isEmpty ? ownerDisplayName : playbackState.title

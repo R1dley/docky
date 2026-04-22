@@ -18,65 +18,118 @@ struct PermissionsView: View {
     private var isLastStep: Bool { currentIndex == steps.count - 1 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            header
-            content
-            Spacer()
-            grantActions
-            footer
+        VStack(spacing: 0) {
+            topSection
+            bottomSection
         }
-        .padding(28)
-        .frame(width: 520, height: 420)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .frame(width: 720, height: 620)
+        .ignoresSafeArea(.container, edges: .top)
         .onAppear { service.refresh() }
         .task(id: currentIndex) {
-            guard (step == .finderAutomation || step == .location), status == .notDetermined else { return }
-            _ = await service.requestPermission(for: step)
-        }
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Welcome to Docky")
-                .font(.largeTitle.bold())
-            Text("Step \(currentIndex + 1) of \(steps.count)")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var content: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                Image(systemName: statusIcon)
-                    .font(.title2)
-                    .foregroundStyle(statusColor)
-                Text(step.title)
-                    .font(.title2.bold())
-                if let method = grantMethodLabel {
-                    Text(method)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Color.secondary.opacity(0.12), in: Capsule())
-                }
+            if (step == .finderAutomation || step == .location), status == .notDetermined {
+                _ = await service.requestPermission(for: step)
             }
-            Text(step.explanation)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+
+            await pollUntilAdvance()
+        }
+    }
+
+    private var topSection: some View {
+        ZStack(alignment: .top) {
+            LinearGradient(
+                colors: heroGradient,
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            VStack(spacing: 20) {
+                HStack(spacing: 12) {
+                    Image(systemName: stepSymbolName)
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 64, height: 64)
+                        .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.16))
+                        )
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Welcome to Docky")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.85))
+                        Text(step.title)
+                            .font(.system(size: 34, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+
+                    Spacer()
+
+//                    statusBadge
+                }
+
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(step.explanation)
+                        .font(.system(size: 15))
+                        .foregroundStyle(.white.opacity(0.78))
+                        .fixedSize(horizontal: false, vertical: true)
+
+//                    HStack(spacing: 10) {
+//                        Image(systemName: "sparkles.rectangle.stack")
+//                            .foregroundStyle(.white.opacity(0.9))
+//                        Text(stepSummary)
+//                            .font(.system(size: 14, weight: .medium))
+//                            .foregroundStyle(.white.opacity(0.88))
+//                        Spacer()
+//                    }
+                }
+                
+                Spacer()
+
+                PageDots(totalPages: steps.count, currentIndex: currentIndex)
+            }
+            .padding(.horizontal, 32)
+            .padding(.top, 80)
+            .padding(.bottom, 26)
+        }
+    }
+
+    private var bottomSection: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Grant Access")
+                    .font(.title2.weight(.bold))
+
+                Text(bottomSummary)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             if showsAppDragProxy {
                 draggableAppProxy
             }
+
+            grantActions
+
+            Spacer(minLength: 0)
+
+            footer
         }
+        .padding(.horizontal, 32)
+        .padding(.top, 28)
+        .padding(.bottom, 30)
     }
 
     @ViewBuilder
     private var grantActions: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 12) {
             Button(systemSettingsButtonTitle) {
                 service.openSystemSettings(for: step)
             }
+            .buttonStyle(.borderedProminent)
+
             if step == .finderAutomation || step == .screenCapture || step == .location {
                 requestButton
             }
@@ -84,18 +137,13 @@ struct PermissionsView: View {
     }
 
     private var showsAppDragProxy: Bool {
-        switch step {
-        case .userFolders, .accessibility:
-            true
-        case .finderAutomation, .screenCapture, .location:
-            false
-        }
+        true
     }
 
     private var draggableAppProxy: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Drag Docky into the list in System Settings to add it without searching.")
-                .font(.subheadline)
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -119,10 +167,10 @@ struct PermissionsView: View {
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
-            .padding(14)
-            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(16)
+            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .strokeBorder(Color.secondary.opacity(0.15))
             )
             .onDrag {
@@ -140,10 +188,9 @@ struct PermissionsView: View {
         HStack(spacing: 12) {
             Button("Re-check") { service.refresh() }
             Spacer()
-            Button(isLastStep ? "Continue" : "Next") { advance() }
+            Button(primaryActionTitle) { advance() }
                 .keyboardShortcut(.return)
                 .buttonStyle(.borderedProminent)
-                .disabled(!canAdvance)
         }
     }
 
@@ -166,6 +213,7 @@ struct PermissionsView: View {
                     _ = await service.requestPermission(for: step)
                 }
             }
+            .buttonStyle(.bordered)
         }
     }
 
@@ -228,11 +276,12 @@ struct PermissionsView: View {
         }
     }
 
-    private var canAdvance: Bool {
-        if step.isRequiredAtLaunch {
-            return status == .granted
+    private var primaryActionTitle: String {
+        if status == .granted {
+            return isLastStep ? "Continue" : "Next"
         }
-        return status != .notDetermined
+
+        return isLastStep ? "Skip" : "Skip"
     }
 
     private func advance() {
@@ -241,5 +290,126 @@ struct PermissionsView: View {
         } else {
             currentIndex += 1
         }
+    }
+
+    private func advanceIfReady() {
+        guard status == .granted else { return }
+        advance()
+    }
+
+    private func pollUntilAdvance() async {
+        advanceIfReady()
+
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+
+            service.refresh()
+            if status == .granted {
+                advance()
+                return
+            }
+        }
+    }
+
+    private var heroGradient: [Color] {
+        switch step {
+        case .userFolders:
+            return [Color(red: 0.29, green: 0.46, blue: 0.96), Color(red: 0.15, green: 0.14, blue: 0.48)]
+        case .finderAutomation:
+            return [Color(red: 0.27, green: 0.68, blue: 0.98), Color(red: 0.12, green: 0.31, blue: 0.68)]
+        case .accessibility:
+            return [Color(red: 0.66, green: 0.39, blue: 0.98), Color(red: 0.24, green: 0.14, blue: 0.56)]
+        case .screenCapture:
+            return [Color(red: 0.10, green: 0.70, blue: 0.63), Color(red: 0.07, green: 0.28, blue: 0.45)]
+        case .location:
+            return [Color(red: 1.00, green: 0.53, blue: 0.40), Color(red: 0.60, green: 0.19, blue: 0.21)]
+        }
+    }
+
+    private var stepSymbolName: String {
+        switch step {
+        case .userFolders:
+            return "folder.badge.gearshape"
+        case .finderAutomation:
+            return "apple.terminal.on.rectangle"
+        case .accessibility:
+            return "figure.wave.circle"
+        case .screenCapture:
+            return "rectangle.on.rectangle"
+        case .location:
+            return "location.circle"
+        }
+    }
+
+    private var stepSummary: String {
+        switch status {
+        case .granted:
+            return "This permission is already enabled. You can continue when ready."
+        case .denied:
+            return "macOS has this disabled right now. Open System Settings, enable it, then come back and re-check."
+        case .notDetermined:
+            return "Docky will guide you through the fastest way to enable this on your Mac."
+        }
+    }
+
+    private var bottomSummary: String {
+        if step.isRequiredAtLaunch {
+            return "This permission unlocks a core Docky feature, but you can skip it for now and grant it later."
+        }
+
+        return "This permission unlocks an optional feature and can be granted later from Settings."
+    }
+
+    private var statusBadge: some View {
+        Label(statusLabel, systemImage: statusIcon)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(statusBadgeColor.opacity(0.28), in: Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(Color.white.opacity(0.16))
+            )
+    }
+
+    private var statusLabel: String {
+        switch status {
+        case .granted:
+            return "Granted"
+        case .denied:
+            return "Needs Attention"
+        case .notDetermined:
+            return "Not Yet Granted"
+        }
+    }
+
+    private var statusBadgeColor: Color {
+        switch status {
+        case .granted:
+            return .green
+        case .denied:
+            return .orange
+        case .notDetermined:
+            return .white
+        }
+    }
+}
+
+private struct PageDots: View {
+    let totalPages: Int
+    let currentIndex: Int
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(0..<totalPages, id: \.self) { index in
+                Capsule(style: .continuous)
+                    .fill(index == currentIndex ? Color.white.opacity(0.95) : Color.white.opacity(0.30))
+                    .frame(width: index == currentIndex ? 24 : 8, height: 8)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Step \(currentIndex + 1) of \(max(totalPages, 1))")
     }
 }

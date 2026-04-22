@@ -192,19 +192,13 @@ private struct DockEditorOverlayView: View {
     }
 
     private var paletteItems: [DockEditPaletteItem] {
-        var items: [DockEditPaletteItem] = [
+        [
             .spacer,
             .divider,
             .widget(ownerBundleIdentifier: WeatherService.widgetOwnerBundleIdentifier, kind: .weather),
+            .widget(ownerBundleIdentifier: MediaPlaybackService.genericNowPlayingOwnerBundleIdentifier, kind: .nowPlaying),
             .smartStack
         ]
-        items.append(contentsOf: mediaPlayback.statesByBundleIdentifier.values
-            .filter(\.hasContent)
-            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
-            .map { state in
-                .widget(ownerBundleIdentifier: state.bundleIdentifier, kind: .nowPlaying)
-            })
-        return items
     }
 
     private var position: ResolvedDockWindowPosition {

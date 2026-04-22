@@ -11,12 +11,15 @@ final class PermissionsWindowController: NSWindowController {
 
     convenience init(steps: [Permission]) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 620),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "Docky Setup"
+        window.subtitle = "Permissions"
+        window.titlebarAppearsTransparent = true
+        window.toolbarStyle = .unifiedCompact
         window.isReleasedWhenClosed = false
         self.init(window: window)
 
