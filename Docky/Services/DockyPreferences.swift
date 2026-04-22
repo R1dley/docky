@@ -135,6 +135,8 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
     let id: String
     let kind: TrailingTileItemKind
     let sourceTileID: String?
+    let folderURL: URL?
+    let folderDisplayName: String?
     let folderDisplayMode: FolderTileDisplayMode?
     let widgetKind: WidgetKind?
     let widgetOwnerBundleIdentifier: String?
@@ -150,7 +152,29 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
             id: "folder:\(sourceTileID)",
             kind: .folder,
             sourceTileID: sourceTileID,
+            folderURL: nil,
+            folderDisplayName: nil,
             folderDisplayMode: .contents,
+            widgetKind: nil,
+            widgetOwnerBundleIdentifier: nil,
+            widgetSpan: nil,
+            hiddenWidgetOwnerBundleIdentifiers: []
+        )
+    }
+
+    nonisolated static func folder(
+        id: String = "custom-folder:\(UUID().uuidString)",
+        url: URL,
+        displayName: String,
+        displayMode: FolderTileDisplayMode = .contents
+    ) -> Self {
+        Self(
+            id: id,
+            kind: .folder,
+            sourceTileID: nil,
+            folderURL: url,
+            folderDisplayName: displayName,
+            folderDisplayMode: displayMode,
             widgetKind: nil,
             widgetOwnerBundleIdentifier: nil,
             widgetSpan: nil,
@@ -163,6 +187,8 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
             id: "trash",
             kind: .trash,
             sourceTileID: nil,
+            folderURL: nil,
+            folderDisplayName: nil,
             folderDisplayMode: nil,
             widgetKind: nil,
             widgetOwnerBundleIdentifier: nil,
@@ -176,6 +202,8 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
             id: "custom:\(UUID().uuidString)",
             kind: .widget,
             sourceTileID: nil,
+            folderURL: nil,
+            folderDisplayName: nil,
             folderDisplayMode: nil,
             widgetKind: kind,
             widgetOwnerBundleIdentifier: ownerBundleIdentifier,
@@ -189,6 +217,8 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
             id: "custom:\(UUID().uuidString)",
             kind: .smartStack,
             sourceTileID: nil,
+            folderURL: nil,
+            folderDisplayName: nil,
             folderDisplayMode: nil,
             widgetKind: nil,
             widgetOwnerBundleIdentifier: nil,
@@ -202,6 +232,8 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
             id: "custom:\(UUID().uuidString)",
             kind: .spacer,
             sourceTileID: nil,
+            folderURL: nil,
+            folderDisplayName: nil,
             folderDisplayMode: nil,
             widgetKind: nil,
             widgetOwnerBundleIdentifier: nil,
@@ -215,6 +247,8 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
             id: "custom:\(UUID().uuidString)",
             kind: .divider,
             sourceTileID: nil,
+            folderURL: nil,
+            folderDisplayName: nil,
             folderDisplayMode: nil,
             widgetKind: nil,
             widgetOwnerBundleIdentifier: nil,

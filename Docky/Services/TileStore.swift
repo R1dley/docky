@@ -442,9 +442,11 @@ final class TileStore: ObservableObject {
 
     func insertTrailingItem(_ item: TrailingTileItem, at destinationIndex: Int) {
         var trailingItems = preferences.trailingItems
+        logTrailingItems("Before insertTrailingItem")
         let clampedDestinationIndex = min(max(destinationIndex, 0), trailingItems.count)
         trailingItems.insert(item, at: clampedDestinationIndex)
         preferences.trailingItems = trailingItems
+        logTrailingItems("After insertTrailingItem")
         refreshTrailingTilesFromPreferences()
         rebuildTiles()
     }
@@ -530,6 +532,8 @@ final class TileStore: ObservableObject {
                     id: item.id,
                     kind: .widget,
                     sourceTileID: nil,
+                    folderURL: nil,
+                    folderDisplayName: nil,
                     folderDisplayMode: nil,
                     widgetKind: widgetKind,
                     widgetOwnerBundleIdentifier: ownerBundleIdentifier,
@@ -541,6 +545,8 @@ final class TileStore: ObservableObject {
                     id: item.id,
                     kind: .smartStack,
                     sourceTileID: nil,
+                    folderURL: nil,
+                    folderDisplayName: nil,
                     folderDisplayMode: nil,
                     widgetKind: nil,
                     widgetOwnerBundleIdentifier: nil,
@@ -552,6 +558,8 @@ final class TileStore: ObservableObject {
                     id: item.id,
                     kind: .spacer,
                     sourceTileID: nil,
+                    folderURL: nil,
+                    folderDisplayName: nil,
                     folderDisplayMode: nil,
                     widgetKind: nil,
                     widgetOwnerBundleIdentifier: nil,
@@ -563,6 +571,8 @@ final class TileStore: ObservableObject {
                     id: item.id,
                     kind: .divider,
                     sourceTileID: nil,
+                    folderURL: nil,
+                    folderDisplayName: nil,
                     folderDisplayMode: nil,
                     widgetKind: nil,
                     widgetOwnerBundleIdentifier: nil,
@@ -672,6 +682,8 @@ final class TileStore: ObservableObject {
             id: existingItem.id,
             kind: existingItem.kind,
             sourceTileID: existingItem.sourceTileID,
+            folderURL: existingItem.folderURL,
+            folderDisplayName: existingItem.folderDisplayName,
             folderDisplayMode: existingItem.folderDisplayMode,
             widgetKind: existingItem.widgetKind,
             widgetOwnerBundleIdentifier: existingItem.widgetOwnerBundleIdentifier,
@@ -727,6 +739,8 @@ final class TileStore: ObservableObject {
             id: existingItem.id,
             kind: existingItem.kind,
             sourceTileID: existingItem.sourceTileID,
+            folderURL: existingItem.folderURL,
+            folderDisplayName: existingItem.folderDisplayName,
             folderDisplayMode: existingItem.folderDisplayMode,
             widgetKind: existingItem.widgetKind,
             widgetOwnerBundleIdentifier: existingItem.widgetOwnerBundleIdentifier,
@@ -754,6 +768,8 @@ final class TileStore: ObservableObject {
             id: existingItem.id,
             kind: existingItem.kind,
             sourceTileID: existingItem.sourceTileID,
+            folderURL: existingItem.folderURL,
+            folderDisplayName: existingItem.folderDisplayName,
             folderDisplayMode: mode,
             widgetKind: existingItem.widgetKind,
             widgetOwnerBundleIdentifier: existingItem.widgetOwnerBundleIdentifier,
@@ -779,12 +795,14 @@ final class TileStore: ObservableObject {
 
     func removeTrailingItem(tileID: String) {
         var trailingItems = preferences.trailingItems
+        logTrailingItems("Before removeTrailingItem")
         let originalCount = trailingItems.count
         trailingItems.removeAll { Self.trailingTileID(for: $0) == tileID }
         guard trailingItems.count != originalCount else {
             return
         }
         preferences.trailingItems = trailingItems
+        logTrailingItems("After removeTrailingItem")
         refreshTrailingTilesFromPreferences()
         rebuildTiles()
     }
@@ -819,11 +837,13 @@ final class TileStore: ObservableObject {
         let systemItems = systemOtherTiles.compactMap(Self.trailingItem(from:)) + [.trash()]
         guard !systemItems.isEmpty else {
             preferences.trailingItems = []
+            logTrailingItems("After refreshTrailingPreferencesIfNeeded cleared")
             return
         }
 
         guard !preferences.trailingItems.isEmpty else {
             preferences.trailingItems = systemItems
+            logTrailingItems("After refreshTrailingPreferencesIfNeeded seeded")
             return
         }
 
@@ -831,25 +851,13 @@ final class TileStore: ObservableObject {
         var mergedItems: [TrailingTileItem] = preferences.trailingItems.filter { item in
             switch item.kind {
             case .folder:
-                guard let sourceTileID = item.sourceTileID else {
-                    return false
+                if let sourceTileID = item.sourceTileID {
+                    return availableFolderIDs.contains(sourceTileID)
                 }
-                return availableFolderIDs.contains(sourceTileID)
+                return item.folderURL != nil
             case .trash, .widget, .smartStack, .spacer, .divider:
                 return true
             }
-        }
-
-        let existingFolderIDs = Set(mergedItems.compactMap(\.sourceTileID))
-        let missingSystemItems = systemOtherTiles
-            .filter { !existingFolderIDs.contains($0.id) }
-            .compactMap(Self.trailingItem(from:))
-
-        if let trashIndex = mergedItems.firstIndex(where: { $0.kind == .trash }) {
-            mergedItems.insert(contentsOf: missingSystemItems, at: trashIndex)
-        } else {
-            mergedItems.append(contentsOf: missingSystemItems)
-            mergedItems.append(.trash())
         }
 
         if !mergedItems.contains(where: { $0.kind == .trash }) {
@@ -861,6 +869,35 @@ final class TileStore: ObservableObject {
         }
 
         preferences.trailingItems = mergedItems
+        logTrailingItems("After refreshTrailingPreferencesIfNeeded merged")
+    }
+
+    private func logTrailingItems(_ message: String) {
+        let summary = preferences.trailingItems.map(Self.trailingItemDebugDescription(_:))
+        NSLog("[Docky] \(message): \(summary)")
+    }
+
+    private static func trailingItemDebugDescription(_ item: TrailingTileItem) -> String {
+        switch item.kind {
+        case .folder:
+            if let sourceTileID = item.sourceTileID {
+                return "folder(system:\(sourceTileID))"
+            }
+            if let folderURL = item.folderURL {
+                return "folder(custom:\(folderURL.path))"
+            }
+            return "folder(unknown)"
+        case .trash:
+            return "trash"
+        case .widget:
+            return "widget(\(item.widgetOwnerBundleIdentifier ?? "unknown"))"
+        case .smartStack:
+            return "smartStack"
+        case .spacer:
+            return "spacer"
+        case .divider:
+            return "divider"
+        }
     }
 
     private func refreshTrailingTilesFromPreferences() {
@@ -972,16 +1009,27 @@ final class TileStore: ObservableObject {
     private func trailingTile(for item: TrailingTileItem) -> Tile? {
         switch item.kind {
         case .folder:
-            guard let sourceTileID = item.sourceTileID,
-                  let tile = systemOtherTilesByID[sourceTileID],
-                  case .folder(let folder) = tile.content else {
+            if let sourceTileID = item.sourceTileID,
+               let tile = systemOtherTilesByID[sourceTileID],
+               case .folder(let folder) = tile.content {
+                return Tile(
+                    id: Self.trailingTileID(for: item),
+                    content: .folder(FolderTile(
+                        url: folder.url,
+                        displayName: folder.displayName,
+                        displayMode: item.effectiveFolderDisplayMode
+                    ))
+                )
+            }
+
+            guard let folderURL = item.folderURL else {
                 return nil
             }
             return Tile(
                 id: Self.trailingTileID(for: item),
                 content: .folder(FolderTile(
-                    url: folder.url,
-                    displayName: folder.displayName,
+                    url: folderURL,
+                    displayName: item.folderDisplayName ?? FileManager.default.displayName(atPath: folderURL.path),
                     displayMode: item.effectiveFolderDisplayMode
                 ))
             )

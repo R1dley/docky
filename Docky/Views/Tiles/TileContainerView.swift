@@ -21,6 +21,8 @@ struct TileContainerView: View {
     @State private var draggedPinnedTileDestinationIndex: Int?
     @State private var draggedTrailingTileDestinationIndex: Int?
     @State private var draggedAppFolderTargetTileID: String?
+    @State private var externalAppDropDestinationIndex: Int?
+    @State private var externalFolderDropDestinationIndex: Int?
     @State private var tileFrames: [String: CGRect] = [:]
 
     var body: some View {
@@ -50,18 +52,60 @@ struct TileContainerView: View {
                     return
                 }
             }
-            .onDrop(of: [UTType.plainText], delegate: PaletteInsertDropDelegate(
-                updateLocation: { location in
+            .onDrop(of: [UTType.plainText, UTType.fileURL], delegate: PaletteInsertDropDelegate(
+                updateLocation: { info in
                     let globalLocation = CGPoint(
-                        x: proxy.frame(in: .global).minX + location.x,
-                        y: proxy.frame(in: .global).minY + location.y
+                        x: proxy.frame(in: .global).minX + info.location.x,
+                        y: proxy.frame(in: .global).minY + info.location.y
                     )
-                    updatePalettePreviewDestination(at: globalLocation)
+                    updatePalettePreviewDestination(info: info, at: globalLocation)
                 },
                 clearPreview: {
                     editMode.endPaletteDrag()
+                    externalAppDropDestinationIndex = nil
+                    externalFolderDropDestinationIndex = nil
                 },
-                performInsert: {
+                performInsert: { providers in
+                    if providers.contains(where: { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }) {
+                        if let destinationIndex = externalAppDropDestinationIndex {
+                            resolveDroppedURLs(from: providers) { itemURLs in
+                                let bundleIdentifiers = itemURLs.compactMap(bundleIdentifierForDroppedApp(from:))
+                                guard !bundleIdentifiers.isEmpty else { return }
+                                DispatchQueue.main.async {
+                                    var insertionIndex = destinationIndex
+                                for bundleIdentifier in bundleIdentifiers {
+                                    _ = TileStore.shared.pinApp(bundleIdentifier: bundleIdentifier, at: insertionIndex)
+                                    insertionIndex += 1
+                                }
+                                externalAppDropDestinationIndex = nil
+                                externalFolderDropDestinationIndex = nil
+                            }
+                        }
+                        return true
+                    }
+
+                        guard let destinationIndex = externalFolderDropDestinationIndex else {
+                            externalAppDropDestinationIndex = nil
+                            externalFolderDropDestinationIndex = nil
+                            return false
+                        }
+
+                            resolveDroppedURLs(from: providers) { itemURLs in
+                                let folderItems = itemURLs.compactMap(makeTrailingFolderItem(from:))
+                                guard !folderItems.isEmpty else { return }
+                                DispatchQueue.main.async {
+                                    var insertionIndex = destinationIndex
+                                for folderItem in folderItems {
+                                    TileStore.shared.insertTrailingItem(folderItem, at: insertionIndex)
+                                    insertionIndex += 1
+                                    }
+                                    externalAppDropDestinationIndex = nil
+                                    externalFolderDropDestinationIndex = nil
+                                }
+                            }
+                            return true
+                        }
+
                     guard let paletteItem = editMode.paletteDrag?.item,
                           let destination = editMode.paletteDropDestination else {
                         editMode.endPaletteDrag()
@@ -189,10 +233,23 @@ struct TileContainerView: View {
         let clampedDestinationIndex = min(max(destinationIndex, 0), remainingPinnedTiles.count)
         if let draggedTile, (isDraggingPinnedTile || store.makePinnedItem(from: draggedTile) != nil) {
             remainingPinnedTiles.insert(draggedTile, at: clampedDestinationIndex)
+        } else if let externalAppPreviewTile {
+            remainingPinnedTiles.insert(externalAppPreviewTile, at: clampedDestinationIndex)
         } else if let palettePreviewTile {
             remainingPinnedTiles.insert(palettePreviewTile, at: clampedDestinationIndex)
         }
         return remainingPinnedTiles
+    }
+
+    private var externalAppPreviewTile: Tile? {
+        guard externalAppDropDestinationIndex != nil else {
+            return nil
+        }
+
+        return Tile(
+            id: "editor-preview:app",
+            content: .app(AppTile(bundleIdentifier: "com.apple.finder", displayName: "App"))
+        )
     }
 
     private var palettePreviewTile: Tile? {
@@ -265,6 +322,9 @@ struct TileContainerView: View {
 
     private var activePinnedDropDestinationIndex: Int? {
         if draggedTileID == nil {
+            if let externalAppDropDestinationIndex {
+                return externalAppDropDestinationIndex
+            }
             guard editMode.paletteDropDestination?.section == .pinned else {
                 return nil
             }
@@ -275,6 +335,9 @@ struct TileContainerView: View {
 
     private var activeTrailingDropDestinationIndex: Int? {
         if draggedTileID == nil {
+            if let externalFolderDropDestinationIndex {
+                return externalFolderDropDestinationIndex
+            }
             guard editMode.paletteDropDestination?.section == .trailing else {
                 return nil
             }
@@ -560,7 +623,12 @@ struct TileContainerView: View {
         }
     }
 
-    private func updatePalettePreviewDestination(at location: CGPoint) {
+    private func updatePalettePreviewDestination(info: DropInfo, at location: CGPoint) {
+        if info.hasItemsConforming(to: [UTType.fileURL]) {
+            updateExternalFilePreviewDestination(info: info, at: location)
+            return
+        }
+
         guard let palettePreviewTile else {
             editMode.paletteDropDestination = nil
             return
@@ -574,6 +642,155 @@ struct TileContainerView: View {
             canDropIntoPinned: makePinnedItem(from: editMode.paletteDrag?.item) != nil,
             canDropIntoTrailing: makeTrailingItem(from: editMode.paletteDrag?.item) != nil
         )
+    }
+
+    private func updateExternalFilePreviewDestination(info: DropInfo, at location: CGPoint) {
+        let positionValue = projected(point: location)
+
+        if isPointInPinnedDropRegion(positionValue) {
+            let visibleTiles = previewPinnedTiles.filter { $0.id != "editor-preview:app" }
+            let destinationIndex = visibleTiles.enumerated().first { _, tile in
+                guard let frame = tileFrames[tile.id] else {
+                    return false
+                }
+                let midpoint = projected(point: frame.origin) + projected(size: frame.size) / 2
+                return positionValue < midpoint
+            }?.offset ?? visibleTiles.count
+
+            guard destinationIndex != externalAppDropDestinationIndex || externalFolderDropDestinationIndex != nil else {
+                return
+            }
+            
+            withAnimation(tileMutationAnimation) {
+                externalAppDropDestinationIndex = destinationIndex
+                externalFolderDropDestinationIndex = nil
+            }
+            return
+        }
+
+        guard isPointInTrailingDropRegion(positionValue) else {
+            withAnimation(tileMutationAnimation) {
+                externalAppDropDestinationIndex = nil
+                externalFolderDropDestinationIndex = nil
+            }
+            return
+        }
+
+        let visibleTiles = previewTrailingTiles
+        let destinationIndex = visibleTiles.enumerated().first { _, tile in
+            guard let frame = tileFrames[tile.id] else {
+                return false
+            }
+            let midpoint = projected(point: frame.origin) + projected(size: frame.size) / 2
+            return positionValue < midpoint
+        }?.offset ?? visibleTiles.count
+
+        guard destinationIndex != externalFolderDropDestinationIndex else {
+            return
+        }
+
+        withAnimation(tileMutationAnimation) {
+            externalAppDropDestinationIndex = nil
+            externalFolderDropDestinationIndex = destinationIndex
+        }
+    }
+
+    private func makeTrailingFolderItem(from url: URL) -> TrailingTileItem? {
+        guard isDroppableFolder(url) else {
+            return nil
+        }
+
+        let displayName = FileManager.default.displayName(atPath: url.path)
+        return TrailingTileItem.folder(url: url, displayName: displayName)
+    }
+
+    private func bundleIdentifierForDroppedApp(from url: URL) -> String? {
+        guard isDroppableApp(url) else {
+            return nil
+        }
+        return Bundle(url: url)?.bundleIdentifier
+    }
+
+    private func isDroppableFolder(_ url: URL) -> Bool {
+        guard url.isFileURL else {
+            return false
+        }
+
+        let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+        return values?.isDirectory == true && values?.isPackage != true
+    }
+
+    private func isDroppableApp(_ url: URL) -> Bool {
+        guard url.isFileURL else {
+            return false
+        }
+
+        let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey, .typeIdentifierKey])
+        guard values?.isDirectory == true, values?.isPackage == true else {
+            return false
+        }
+
+        return url.pathExtension.caseInsensitiveCompare("app") == .orderedSame
+            || values?.typeIdentifier == UTType.application.identifier
+    }
+
+    private func resolveDroppedURLs(from providers: [NSItemProvider], completion: @escaping ([URL]) -> Void) {
+        let fileURLProviders = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }
+        guard !fileURLProviders.isEmpty else {
+            completion([])
+            return
+        }
+
+        let dispatchGroup = DispatchGroup()
+        let lock = NSLock()
+        var resolvedURLs: [URL] = []
+
+        for provider in fileURLProviders {
+            dispatchGroup.enter()
+            provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
+                defer { dispatchGroup.leave() }
+                guard let data, let url = URL(dataRepresentation: data, relativeTo: nil) else {
+                    return
+                }
+                lock.lock()
+                resolvedURLs.append(url)
+                lock.unlock()
+            }
+        }
+
+        dispatchGroup.notify(queue: .global(qos: .userInitiated)) {
+            let sanitizedURLs = sanitizedDroppedURLs(resolvedURLs)
+            logDroppedURLs(rawURLs: resolvedURLs, sanitizedURLs: sanitizedURLs)
+            completion(sanitizedURLs)
+        }
+    }
+
+    private func sanitizedDroppedURLs(_ urls: [URL]) -> [URL] {
+        let normalizedURLs = urls.map {
+            $0.standardizedFileURL.resolvingSymlinksInPath()
+        }
+
+        var deduplicatedURLs: [URL] = []
+        var seenPaths: Set<String> = []
+        for url in normalizedURLs {
+            guard seenPaths.insert(url.path).inserted else {
+                continue
+            }
+            deduplicatedURLs.append(url)
+        }
+
+        return deduplicatedURLs.filter { candidateURL in
+            !deduplicatedURLs.contains { otherURL in
+                otherURL != candidateURL && otherURL.path.hasPrefix(candidateURL.path + "/")
+            }
+        }
+    }
+
+    private func logDroppedURLs(rawURLs: [URL], sanitizedURLs: [URL]) {
+        let rawPaths = rawURLs.map(\.path)
+        let sanitizedPaths = sanitizedURLs.map(\.path)
+        NSLog("[Docky] External drop raw URLs: \(rawPaths)")
+        NSLog("[Docky] External drop sanitized URLs: \(sanitizedPaths)")
     }
 
     private func isPointInPinnedDropRegion(_ positionValue: CGFloat) -> Bool {
@@ -765,20 +982,20 @@ struct TileContainerView: View {
 }
 
 private struct PaletteInsertDropDelegate: DropDelegate {
-    let updateLocation: (CGPoint) -> Void
+    let updateLocation: (DropInfo) -> Void
     let clearPreview: () -> Void
-    let performInsert: () -> Bool
+    let performInsert: ([NSItemProvider]) -> Bool
 
     func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [UTType.plainText])
+        info.hasItemsConforming(to: [UTType.plainText, UTType.fileURL])
     }
 
     func dropEntered(info: DropInfo) {
-        updateLocation(info.location)
+        updateLocation(info)
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        updateLocation(info.location)
+        updateLocation(info)
         return DropProposal(operation: .copy)
     }
 
@@ -787,8 +1004,8 @@ private struct PaletteInsertDropDelegate: DropDelegate {
     }
 
     func performDrop(info: DropInfo) -> Bool {
-        updateLocation(info.location)
-        return performInsert()
+        updateLocation(info)
+        return performInsert(info.itemProviders(for: [UTType.plainText, UTType.fileURL]))
     }
 }
 

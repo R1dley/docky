@@ -32,7 +32,14 @@ struct TileView: View {
             case .app, .trash:
                 return catalogActions
             case .folder:
-                return folderDisplayContextActions + [.divider] + catalogActions
+                var actions = folderDisplayContextActions + [.divider] + catalogActions
+                if isDockyTrailingTile {
+                    actions.append(.divider)
+                    actions.append(.action("Remove from Dock") {
+                        removeDockyTile()
+                    })
+                }
+                return actions
             case .appFolder, .widget, .smartStack, .spacer, .divider:
                 break
             }
@@ -48,7 +55,7 @@ struct TileView: View {
         case .smartStack(let stack):
             return smartStackContextActions(for: stack)
         case .folder(let folder):
-            return folderDisplayContextActions + [.divider,
+            var actions = folderDisplayContextActions + [.divider,
                 .action("Open in Finder") {
                     Task {
                         _ = await AppleScriptService.shared.openFinderWindow(for: folder.url)
@@ -60,6 +67,15 @@ struct TileView: View {
                     }
                 }
             ]
+
+            if isDockyTrailingTile {
+                actions.append(.divider)
+                actions.append(.action("Remove from Dock") {
+                    removeDockyTile()
+                })
+            }
+
+            return actions
         case .trash:
             return [
                 .action("Open Trash") {
@@ -226,7 +242,7 @@ struct TileView: View {
     @ViewBuilder
     private var laidOutContent: some View {
         switch tile.content {
-        case .appFolder, .widget, .smartStack, .folder, .trash:
+        case .appFolder, .widget, .smartStack:
             GeometryReader { proxy in
                 content
                     .frame(
@@ -234,6 +250,11 @@ struct TileView: View {
                         height: max(0, proxy.size.height - contentInsets.height * 2)
                     )
                     .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            }
+        case .folder, .trash:
+            GeometryReader { _ in
+                content
+                    .padding(contentPaddingEdges, contentPadding)
             }
         case .app, .spacer, .divider:
             content
@@ -512,6 +533,17 @@ struct TileView: View {
     private func appFolderContextActions(for folder: AppFolderTile) -> [ContextAction] {
         var actions = customDockyTileActions
 
+        if !folder.apps.isEmpty {
+            if !actions.isEmpty {
+                actions.append(.divider)
+            }
+            actions.append(.action("Open All") {
+                for app in folder.apps {
+                    WorkspaceService.shared.activateOrOpen(bundleIdentifier: app.bundleIdentifier)
+                }
+            })
+        }
+
         let appActions = folder.apps.map { app in
             ContextAction.submenu(app.displayName, children: [
                 .action("Open") {
@@ -560,6 +592,13 @@ struct TileView: View {
 
         actions.append(.divider)
         actions.append(.submenu("Options", children: appOptionsActions(for: app, isPinned: isPinned, canTogglePinned: canTogglePinned)))
+
+        if isDockyPinnedTile || isDockyTrailingTile {
+            actions.append(.divider)
+            actions.append(.action("Remove from Dock") {
+                removeDockyTile()
+            })
+        }
 
         if isRunning && app.bundleIdentifier != Self.finderBundleIdentifier {
             actions.append(.divider)

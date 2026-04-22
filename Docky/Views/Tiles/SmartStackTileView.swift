@@ -40,19 +40,21 @@ struct SmartStackTileView: View {
                         .animation(.easeInOut(duration: 0.2), value: selection)
                     }
                     .clipped()
-
-                    if tile.widgets.count > 1 {
-                        VStack(spacing: 5) {
-                            ForEach(tile.widgets.indices, id: \.self) { index in
-                                Capsule(style: .continuous)
-                                    .fill(index == selection ? Color.primary.opacity(0.9) : Color.primary.opacity(0.22))
-                                    .frame(width: 3, height: index == selection ? 18 : 8)
-                                    .animation(.easeInOut(duration: 0.18), value: selection)
+                    .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius, style: .continuous))
+                    .overlay {
+                        if tile.widgets.count > 1 {
+                            VStack(spacing: 5) {
+                                ForEach(tile.widgets.indices, id: \.self) { index in
+                                    Capsule(style: .continuous)
+                                        .fill(index == selection ? Color.primary.opacity(0.9) : Color.primary.opacity(0.22))
+                                        .frame(width: 3, height: index == selection ? 18 : 8)
+                                        .animation(.easeInOut(duration: 0.18), value: selection)
+                                }
                             }
+                            .frame(width: 6)
+                            .opacity(showsPagingIndicator ? 1 : 0)
+                            .animation(.easeInOut(duration: 0.18), value: showsPagingIndicator)
                         }
-                        .frame(width: 6)
-                        .opacity(showsPagingIndicator ? 1 : 0)
-                        .animation(.easeInOut(duration: 0.18), value: showsPagingIndicator)
                     }
                 }
             }
@@ -70,7 +72,6 @@ struct SmartStackTileView: View {
             removeScrollMonitor()
             hidePagingIndicator()
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius, style: .continuous))
     }
 
     private var emptyState: some View {
