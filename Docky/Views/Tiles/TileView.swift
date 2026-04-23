@@ -39,7 +39,9 @@ struct TileView: View {
     private func contextActions(modifierFlags: NSEvent.ModifierFlags) -> [ContextAction] {
         if let catalogActions = MenuCatalogService.shared.contextActions(for: tile, modifierFlags: modifierFlags) {
             switch tile.content {
-            case .app, .trash:
+            case .app(let app):
+                return appContextActions(for: app, modifierFlags: modifierFlags, baseActions: catalogActions)
+            case .trash:
                 return catalogActions
             case .folder:
                 var actions = folderDisplayContextActions + [.divider] + catalogActions
@@ -598,12 +600,23 @@ struct TileView: View {
 
     private func appContextActions(
         for app: AppTile,
-        modifierFlags: NSEvent.ModifierFlags
+        modifierFlags: NSEvent.ModifierFlags,
+        baseActions: [ContextAction]? = nil
     ) -> [ContextAction] {
         guard !app.bundleIdentifier.isEmpty else {
             return []
         }
 
+        let workspace = WorkspaceService.shared
+        let windows = workspace.appWindows(bundleIdentifier: app.bundleIdentifier)
+        let actions = baseActions ?? fallbackAppContextActions(for: app, modifierFlags: modifierFlags)
+        return injectingAppWindowActions(windows, into: actions)
+    }
+
+    private func fallbackAppContextActions(
+        for app: AppTile,
+        modifierFlags: NSEvent.ModifierFlags
+    ) -> [ContextAction] {
         let workspace = WorkspaceService.shared
         let isRunning = workspace.isRunning(bundleIdentifier: app.bundleIdentifier)
         let isPinned = tile.id.hasPrefix("pinned:")
@@ -645,6 +658,61 @@ struct TileView: View {
         }
 
         return actions
+    }
+
+    private func injectingAppWindowActions(_ windows: [AppWindow], into actions: [ContextAction]) -> [ContextAction] {
+        guard !windows.isEmpty else {
+            return actions
+        }
+
+        let windowActions = windows.map { window in
+            ContextAction.action(appWindowMenuTitle(for: window)) {
+                _ = WorkspaceService.shared.focus(window: window)
+            }
+        }
+
+        var result = actions
+        var insertionIndex = result.firstIndex { action in
+            action.kind == .submenu && action.title == "Options"
+        } ?? result.endIndex
+
+        if insertionIndex > result.startIndex, result[insertionIndex - 1].kind != .divider {
+            result.insert(.divider, at: insertionIndex)
+            insertionIndex += 1
+        }
+
+        result.insert(contentsOf: windowActions, at: insertionIndex)
+
+        let trailingDividerIndex = min(insertionIndex + windowActions.count, result.endIndex)
+        if trailingDividerIndex < result.endIndex, result[trailingDividerIndex].kind != .divider {
+            result.insert(.divider, at: trailingDividerIndex)
+        }
+
+        while result.first?.kind == .divider {
+            result.removeFirst()
+        }
+
+        while result.last?.kind == .divider {
+            result.removeLast()
+        }
+
+        return result.enumerated().compactMap { index, action in
+            if action.kind == .divider,
+               index > 0,
+               result[index - 1].kind == .divider {
+                return nil
+            }
+
+            return action
+        }
+    }
+
+    private func appWindowMenuTitle(for window: AppWindow) -> String {
+        guard window.isMinimized else {
+            return window.windowTitle
+        }
+
+        return "\(window.windowTitle) (Minimized)"
     }
 
     private func minimizedWindowContextActions(

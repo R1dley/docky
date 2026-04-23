@@ -18,6 +18,7 @@ import ScreenCaptureKit
 
 private let axWindowNumberAttribute = "AXWindowNumber" as CFString
 private let axCloseAction = "AXClose" as CFString
+private let axRaiseAction = "AXRaise" as CFString
 
 struct RunningApp: Hashable, Identifiable {
     let bundleIdentifier: String
@@ -28,6 +29,18 @@ struct RunningApp: Hashable, Identifiable {
     let isHidden: Bool
 
     var id: String { bundleIdentifier }
+}
+
+struct AppWindow: Equatable, Identifiable {
+    let windowIdentifier: String
+    let windowNumber: Int?
+    let bundleIdentifier: String
+    let processIdentifier: pid_t
+    let appDisplayName: String
+    let windowTitle: String
+    let isMinimized: Bool
+
+    var id: String { windowIdentifier }
 }
 
 final class WorkspaceService: ObservableObject {
@@ -76,6 +89,14 @@ final class WorkspaceService: ObservableObject {
 
     func activateOrOpen(bundleIdentifier: String) {
         if let runningApp = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first {
+            if PermissionsService.shared.accessibility == .granted,
+               appWindows(bundleIdentifier: bundleIdentifier).isEmpty,
+               let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) {
+                openApplication(at: appURL)
+                return
+            }
+
+            runningApp.unhide()
             runningApp.activate(options: [.activateAllWindows])
             return
         }
@@ -84,9 +105,53 @@ final class WorkspaceService: ObservableObject {
             return
         }
 
+        openApplication(at: appURL)
+    }
+
+    func appWindows(bundleIdentifier: String) -> [AppWindow] {
+        guard PermissionsService.shared.accessibility == .granted,
+              let runningApp = runningByBundleID[bundleIdentifier] else {
+            return []
+        }
+
+        let applicationElement = AXUIElementCreateApplication(runningApp.processIdentifier)
+        return windowElements(applicationElement: applicationElement).enumerated().compactMap { index, windowElement in
+            appWindow(from: windowElement, runningApp: runningApp, fallbackIndex: index)
+        }
+    }
+
+    @discardableResult
+    func focus(window: AppWindow) -> Bool {
+        guard PermissionsService.shared.accessibility == .granted else {
+            PermissionsService.shared.presentPermissionAlert(for: .accessibility, actionTitle: "focus app windows")
+            return false
+        }
+
+        guard let (runningApp, windowElement) = appWindowTarget(for: window) else {
+            refreshMinimizedWindows()
+            return false
+        }
+
+        let restored = !window.isMinimized || AXUIElementSetAttributeValue(
+            windowElement,
+            kAXMinimizedAttribute as CFString,
+            kCFBooleanFalse
+        ) == .success
+
+        runningApp.unhide()
+        runningApp.activate(options: [.activateAllWindows])
+        let raised = AXUIElementPerformAction(windowElement, axRaiseAction) == .success
+
+        refreshMinimizedWindows()
+        return restored && raised
+    }
+
+    private func openApplication(at appURL: URL) {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
         NSWorkspace.shared.openApplication(
             at: appURL,
-            configuration: NSWorkspace.OpenConfiguration(),
+            configuration: configuration,
             completionHandler: nil
         )
     }
@@ -347,14 +412,41 @@ final class WorkspaceService: ObservableObject {
     }
 
     private func minimizedWindowElements(applicationElement: AXUIElement) -> [AXUIElement] {
+        windowElements(applicationElement: applicationElement).filter { window in
+            boolAttribute(kAXMinimizedAttribute as CFString, of: window) == true
+        }
+    }
+
+    private func windowElements(applicationElement: AXUIElement) -> [AXUIElement] {
         guard let windows = arrayAttribute(kAXWindowsAttribute as CFString, of: applicationElement) as? [AXUIElement] else {
             return []
         }
 
         return windows.filter { window in
-            boolAttribute(kAXMinimizedAttribute as CFString, of: window) == true
-                && roleAttribute(of: window) == (kAXWindowRole as String)
+            roleAttribute(of: window) == (kAXWindowRole as String)
         }
+    }
+
+    private func appWindow(
+        from windowElement: AXUIElement,
+        runningApp: RunningApp,
+        fallbackIndex: Int
+    ) -> AppWindow? {
+        let title = stringAttribute(kAXTitleAttribute as CFString, of: windowElement)
+            ?? runningApp.localizedName
+        let windowNumber = intAttribute(axWindowNumberAttribute, of: windowElement)
+        let fallbackToken = title.isEmpty ? "window-\(fallbackIndex)" : "\(title):\(fallbackIndex)"
+
+        return AppWindow(
+            windowIdentifier: windowNumber.map { "\(runningApp.bundleIdentifier):\($0)" }
+                ?? "\(runningApp.bundleIdentifier):\(fallbackToken)",
+            windowNumber: windowNumber,
+            bundleIdentifier: runningApp.bundleIdentifier,
+            processIdentifier: runningApp.processIdentifier,
+            appDisplayName: runningApp.localizedName,
+            windowTitle: title.isEmpty ? runningApp.localizedName : title,
+            isMinimized: boolAttribute(kAXMinimizedAttribute as CFString, of: windowElement) == true
+        )
     }
 
     private func minimizedWindowTile(
@@ -388,6 +480,15 @@ final class WorkspaceService: ObservableObject {
         return stringAttribute(kAXTitleAttribute as CFString, of: element) == target.windowTitle
     }
 
+    private func appWindowMatches(_ element: AXUIElement, target: AppWindow) -> Bool {
+        if let targetWindowNumber = target.windowNumber,
+           intAttribute(axWindowNumberAttribute, of: element) == targetWindowNumber {
+            return true
+        }
+
+        return stringAttribute(kAXTitleAttribute as CFString, of: element) == target.windowTitle
+    }
+
     private func minimizedWindowTarget(for window: MinimizedWindowTile) -> (NSRunningApplication, AXUIElement)? {
         guard let runningApp = NSRunningApplication.runningApplications(withBundleIdentifier: window.bundleIdentifier).first else {
             return nil
@@ -396,6 +497,20 @@ final class WorkspaceService: ObservableObject {
         let applicationElement = AXUIElementCreateApplication(runningApp.processIdentifier)
         guard let windowElement = minimizedWindowElements(applicationElement: applicationElement)
             .first(where: { minimizedWindowMatches($0, target: window) }) else {
+            return nil
+        }
+
+        return (runningApp, windowElement)
+    }
+
+    private func appWindowTarget(for window: AppWindow) -> (NSRunningApplication, AXUIElement)? {
+        guard let runningApp = NSRunningApplication.runningApplications(withBundleIdentifier: window.bundleIdentifier).first else {
+            return nil
+        }
+
+        let applicationElement = AXUIElementCreateApplication(runningApp.processIdentifier)
+        guard let windowElement = windowElements(applicationElement: applicationElement)
+            .first(where: { appWindowMatches($0, target: window) }) else {
             return nil
         }
 

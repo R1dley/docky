@@ -58,7 +58,7 @@ enum Permission: String, CaseIterable, Identifiable {
         case .finderAutomation:
             return "Docky can ask Finder to reveal files, open folders in Finder, open the Trash, and empty the Trash. macOS controls this separately from file access, and you can grant or revoke it at any time in Privacy & Security."
         case .accessibility:
-            return "Accessibility access lets Docky click menu bar items for curated menuClick actions and inspect minimized windows so it can restore them beside the Trash. These actions are slower and more fragile than built-in actions, so Docky requests this only when needed."
+            return "Accessibility access lets Docky click menu bar items for curated menuClick actions, inspect app windows for Dock-like reopen behavior and window menus, and restore minimized windows beside the Trash. These actions are slower and more fragile than built-in actions, so Docky requests this only when needed."
         case .screenCapture:
             return "Grant Screen Recording so Docky can show thumbnail previews for minimized windows. Docky only captures the minimized window itself for its dock tile, and nothing leaves your Mac. macOS may require quitting and reopening Docky after you allow this."
         case .location:
