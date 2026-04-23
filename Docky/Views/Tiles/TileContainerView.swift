@@ -170,7 +170,7 @@ struct TileContainerView: View {
                 tileSpacing: preferences.tileSpacing,
                 position: position
             )
-            TileView(tile: draggedTile)
+            TileView(tile: draggedTile, isDragging: true)
                 .frame(width: size.width, height: size.height)
                 .position(draggedTilePosition)
                 .offset(axisSize(value: draggedTileOffset))
@@ -190,6 +190,10 @@ struct TileContainerView: View {
 
         for tile in store.tiles.dropFirst() {
             if appendedTrailingSection {
+                continue
+            }
+
+            if groupedOpenedAppFolderID(for: tile.id) != nil {
                 continue
             }
 
@@ -219,6 +223,20 @@ struct TileContainerView: View {
         pinnedTiles.map(\.id)
     }
 
+    private var groupedOpenedAppTilesByFolderID: [String: [Tile]] {
+        let groupedEntries: [(folderID: String, tile: Tile)] = store.tiles.compactMap { tile in
+            guard case .app = tile.content,
+                  let folderID = groupedOpenedAppFolderID(for: tile.id) else {
+                return nil
+            }
+            return (folderID: folderID, tile: tile)
+        }
+
+        return Dictionary(grouping: groupedEntries, by: { $0.folderID }).mapValues { entries in
+            entries.map { $0.tile }
+        }
+    }
+
     private var trailingTiles: [Tile] {
         store.tiles.filter { isTrailingReorderable(tileID: $0.id) }
     }
@@ -228,6 +246,10 @@ struct TileContainerView: View {
     }
 
     private var previewPinnedTiles: [Tile] {
+        expandedPinnedTiles(from: previewPinnedBaseTiles)
+    }
+
+    private var previewPinnedBaseTiles: [Tile] {
         guard let destinationIndex = activePinnedDropDestinationIndex else {
             return pinnedTiles
         }
@@ -243,6 +265,23 @@ struct TileContainerView: View {
             remainingPinnedTiles.insert(palettePreviewTile, at: clampedDestinationIndex)
         }
         return remainingPinnedTiles
+    }
+
+    private func expandedPinnedTiles(from baseTiles: [Tile]) -> [Tile] {
+        var result: [Tile] = []
+
+        for tile in baseTiles {
+            result.append(tile)
+
+            guard preferences.showsGroupedOpenedAppsInDock,
+                  case .appFolder(let folder) = tile.content else {
+                continue
+            }
+
+            result.append(contentsOf: groupedOpenedAppTilesByFolderID[folder.identifier] ?? [])
+        }
+
+        return result
     }
 
     private var palettePreviewTile: Tile? {
@@ -412,7 +451,9 @@ struct TileContainerView: View {
             return !app.bundleIdentifier.isEmpty && app.bundleIdentifier != "com.apple.finder"
         case .minimizedWindow:
             return false
-        case .appFolder, .widget, .smartStack, .spacer, .divider:
+        case .appFolder:
+            return isPinnedReorderable(tileID: tile.id)
+        case .widget, .smartStack, .spacer, .divider:
             return editMode.isActive && (isPinnedReorderable(tileID: tile.id) || isTrailingReorderable(tileID: tile.id))
         case .folder, .trash:
             return editMode.isActive && isTrailingReorderable(tileID: tile.id)
@@ -555,7 +596,7 @@ struct TileContainerView: View {
                 store.removePinnedItem(tileID: tile.id)
                 store.insertTrailingItem(trailingItem, at: destinationIndex)
             } else {
-                let finalPinnedTileIDs = previewPinnedTiles.map(\.id)
+                let finalPinnedTileIDs = previewPinnedBaseTiles.map(\.id)
                 if finalPinnedTileIDs != pinnedTileIDs {
                     store.setPinnedTileOrder(ids: finalPinnedTileIDs)
                 }
@@ -673,7 +714,7 @@ struct TileContainerView: View {
         let positionValue = projected(point: location)
 
         if isPointInPinnedDropRegion(positionValue) {
-            let visibleTiles = previewPinnedTiles
+            let visibleTiles = previewPinnedBaseTiles
             let destinationIndex = visibleTiles.enumerated().first { _, tile in
                 guard let frame = tileFrames[tile.id] else {
                     return false
@@ -848,7 +889,7 @@ struct TileContainerView: View {
     private func previewTiles(for section: DockEditDropSection) -> [Tile] {
         switch section {
         case .pinned:
-            previewPinnedTiles
+            previewPinnedBaseTiles
         case .trailing:
             previewTrailingTiles
         }
@@ -903,7 +944,7 @@ struct TileContainerView: View {
     }
 
     private func appFolderDropTargetTileID(at location: CGPoint, sourceTileID: String, bundleIdentifier: String) -> String? {
-        for tile in previewPinnedTiles where tile.id != sourceTileID {
+        for tile in previewPinnedBaseTiles where tile.id != sourceTileID {
             switch tile.content {
             case .app(let app):
                 guard app.bundleIdentifier != bundleIdentifier else {
@@ -930,6 +971,19 @@ struct TileContainerView: View {
         }
 
         return nil
+    }
+
+    private func groupedOpenedAppFolderID(for tileID: String) -> String? {
+        guard tileID.hasPrefix("folder-running:") else {
+            return nil
+        }
+
+        let suffix = tileID.dropFirst("folder-running:".count)
+        guard let separatorIndex = suffix.lastIndex(of: ":") else {
+            return nil
+        }
+
+        return String(suffix[..<separatorIndex])
     }
 
     private func projected(size: CGSize) -> CGFloat {

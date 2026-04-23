@@ -9,11 +9,25 @@ import SwiftUI
 struct AppFolderTileView: View {
     let tile: AppFolderTile
     let cornerRadius: CGFloat
+    let suppressesGroupedOpenedBackdrop: Bool
     @ObservedObject private var preferences = DockyPreferences.shared
     @ObservedObject private var workspace = WorkspaceService.shared
 
+    init(
+        tile: AppFolderTile,
+        cornerRadius: CGFloat,
+        suppressesGroupedOpenedBackdrop: Bool = false
+    ) {
+        self.tile = tile
+        self.cornerRadius = cornerRadius
+        self.suppressesGroupedOpenedBackdrop = suppressesGroupedOpenedBackdrop
+        self._preferences = ObservedObject(wrappedValue: DockyPreferences.shared)
+        self._workspace = ObservedObject(wrappedValue: WorkspaceService.shared)
+    }
+
     var openedAppCount: Int {
-        guard preferences.showsGroupedOpenedAppsInDock else {
+        guard preferences.showsGroupedOpenedAppsInDock,
+              !suppressesGroupedOpenedBackdrop else {
             return 0
         }
 

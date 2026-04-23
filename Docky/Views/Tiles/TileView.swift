@@ -11,6 +11,7 @@ import SwiftUI
 
 struct TileView: View {
     let tile: Tile
+    let isDragging: Bool
     @ObservedObject private var dockSettings = DockSettingsService.shared
     @ObservedObject private var preferences = DockyPreferences.shared
     @ObservedObject private var workspace = WorkspaceService.shared
@@ -25,6 +26,15 @@ struct TileView: View {
 
     private static let finderBundleIdentifier = "com.apple.finder"
     private static let folderPopoverRetapGuardInterval: TimeInterval = 0.25
+
+    init(tile: Tile, isDragging: Bool = false) {
+        self.tile = tile
+        self.isDragging = isDragging
+        self._dockSettings = ObservedObject(wrappedValue: DockSettingsService.shared)
+        self._preferences = ObservedObject(wrappedValue: DockyPreferences.shared)
+        self._workspace = ObservedObject(wrappedValue: WorkspaceService.shared)
+        self._mediaPlayback = ObservedObject(wrappedValue: MediaPlaybackService.shared)
+    }
 
     private func contextActions(modifierFlags: NSEvent.ModifierFlags) -> [ContextAction] {
         if let catalogActions = MenuCatalogService.shared.contextActions(for: tile, modifierFlags: modifierFlags) {
@@ -430,7 +440,8 @@ struct TileView: View {
         case .appFolder(let folder):
             AppFolderTileView(
                 tile: folder,
-                cornerRadius: nonAppTileCornerRadius
+                cornerRadius: nonAppTileCornerRadius,
+                suppressesGroupedOpenedBackdrop: isDragging
             )
         case .widget(let widget):
             WidgetTileView(
