@@ -243,7 +243,7 @@ struct NowPlayingWidgetTileView: View {
 
     private func togglePlayPause() {
         Task {
-            await mediaPlayback.togglePlayPause(for: tile.ownerBundleIdentifier)
+            await mediaPlayback.pressPlayPauseButton(for: tile.ownerBundleIdentifier)
         }
     }
 

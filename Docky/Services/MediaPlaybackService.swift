@@ -108,6 +108,17 @@ final class MediaPlaybackService: ObservableObject {
         refresh()
     }
 
+    func pressPlayPauseButton(for bundleIdentifier: String) async {
+        if state(for: bundleIdentifier)?.isPlaying == true {
+            await togglePlayPause(for: bundleIdentifier)
+            return
+        }
+
+        mediaRemote.sendCommand(.play)
+        try? await Task.sleep(for: .milliseconds(120))
+        refresh()
+    }
+
     func skipToNext(for bundleIdentifier: String) async {
         guard let resolvedBundleIdentifier = resolvedBundleIdentifier(for: bundleIdentifier),
               state(for: resolvedBundleIdentifier)?.hasContent == true else {

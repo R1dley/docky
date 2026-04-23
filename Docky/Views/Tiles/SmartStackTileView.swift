@@ -22,9 +22,16 @@ struct SmartStackTileView: View {
             handleScroll(deltaX: deltaX, deltaY: deltaY)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onChange(of: tile.widgets.count) { _, count in
-            selection = min(selection, max(0, count - 1))
-            if count <= 1 {
+        .onChange(of: tile.widgets.map(\.identifier)) { oldIdentifiers, newIdentifiers in
+            if let newWidgetIdentifier = newIdentifiers.first(where: { !oldIdentifiers.contains($0) }),
+               let newSelection = newIdentifiers.firstIndex(of: newWidgetIdentifier) {
+                selection = newSelection
+                showPagingIndicator()
+            } else {
+                selection = min(selection, max(0, newIdentifiers.count - 1))
+            }
+
+            if newIdentifiers.count <= 1 {
                 hidePagingIndicator()
             }
         }
