@@ -102,8 +102,15 @@ struct AppFolderTileView: View {
                                         side: side
                                     )
                                 } else {
-                                    RoundedRectangle(cornerRadius: min(cornerRadius, 8), style: .continuous)
-                                        .fill(.primary.opacity(0.06))
+                                    if preferences.tileClipShape == .circle {
+                                        let inset = preferences.tileClipShape == .circle ? floor(side * 3 / 32) : 0
+                                        Circle()
+                                            .fill(.primary.opacity(0.06))
+                                            .padding(inset)
+                                    } else {
+                                        RoundedRectangle(cornerRadius: min(cornerRadius, 8), style: .continuous)
+                                            .fill(.primary.opacity(0.06))
+                                    }
                                 }
                             }
                             .frame(width: side, height: side)
@@ -117,7 +124,7 @@ struct AppFolderTileView: View {
 
     @ViewBuilder
     private func gridIcon(forBundleIdentifier bundleIdentifier: String, side: CGFloat) -> some View {
-        if preferences.tileClipShape == .circle {
+        if shouldApplyCircleClip(to: bundleIdentifier) {
             baseGridIcon(forBundleIdentifier: bundleIdentifier, side: side)
                 .glassEffect(.regular, in: .circle)
                 .clipShape(.circle)
@@ -127,14 +134,27 @@ struct AppFolderTileView: View {
     }
 
     private func baseGridIcon(forBundleIdentifier bundleIdentifier: String, side: CGFloat) -> some View {
-        let inset = preferences.tileClipShape == .circle ? floor(side * 3 / 32) : 0
+        let inset = shouldApplyCircleClip(to: bundleIdentifier) ? floor(side * 3 / 32) : 0
 
-        return Image(nsImage: IconCacheService.shared.icon(forBundleIdentifier: bundleIdentifier))
+        return Image(nsImage: icon(forBundleIdentifier: bundleIdentifier))
             .resizable()
             .interpolation(.high)
             .aspectRatio(contentMode: .fit)
             .frame(width: side + inset * 2, height: side + inset * 2)
             .frame(width: side - inset * 2, height: side - inset * 2)
+    }
+
+    private func shouldApplyCircleClip(to bundleIdentifier: String) -> Bool {
+        preferences.tileClipShape == .circle
+    }
+
+    private func icon(forBundleIdentifier bundleIdentifier: String) -> NSImage {
+        if let overrideURL = preferences.effectiveAppIconOverrideURL(forBundleIdentifier: bundleIdentifier),
+           let overrideImage = IconCacheService.shared.image(forImageFileURL: overrideURL) {
+            return overrideImage
+        }
+
+        return IconCacheService.shared.icon(forBundleIdentifier: bundleIdentifier)
     }
 }
 
@@ -142,6 +162,7 @@ struct AppFolderPopoverView: View {
     let tile: AppFolderTile
     @Binding var isPresented: Bool
     let onPopoverSizeChange: (CGSize) -> Void
+    @ObservedObject private var preferences = DockyPreferences.shared
 
     private let columns = 3
     private let itemWidth: CGFloat = 112
@@ -182,7 +203,7 @@ struct AppFolderPopoverView: View {
                             isPresented = false
                         } label: {
                             VStack(spacing: 8) {
-                                Image(nsImage: IconCacheService.shared.icon(forBundleIdentifier: app.bundleIdentifier))
+                                Image(nsImage: icon(forBundleIdentifier: app.bundleIdentifier))
                                     .resizable()
                                     .interpolation(.high)
                                     .aspectRatio(contentMode: .fit)
@@ -230,6 +251,15 @@ struct AppFolderPopoverView: View {
         let gridHeight = CGFloat(rowCount) * itemHeight + CGFloat(max(rowCount - 1, 0)) * itemSpacing
         let height = min(gridHeight + contentPadding * 2 + headerHeight + 16, maxHeight)
         return CGSize(width: width, height: height)
+    }
+
+    private func icon(forBundleIdentifier bundleIdentifier: String) -> NSImage {
+        if let overrideURL = preferences.effectiveAppIconOverrideURL(forBundleIdentifier: bundleIdentifier),
+           let overrideImage = IconCacheService.shared.image(forImageFileURL: overrideURL) {
+            return overrideImage
+        }
+
+        return IconCacheService.shared.icon(forBundleIdentifier: bundleIdentifier)
     }
 }
 
@@ -327,8 +357,15 @@ struct AppFolderListMenuPresenter: NSViewRepresentable {
         }
 
         private func listMenuIcon(for bundleIdentifier: String) -> NSImage {
-            let icon = IconCacheService.shared.icon(forBundleIdentifier: bundleIdentifier).copy() as? NSImage
-                ?? IconCacheService.shared.icon(forBundleIdentifier: bundleIdentifier)
+            let baseIcon: NSImage
+            if let overrideURL = DockyPreferences.shared.effectiveAppIconOverrideURL(forBundleIdentifier: bundleIdentifier),
+               let overrideImage = IconCacheService.shared.image(forImageFileURL: overrideURL) {
+                baseIcon = overrideImage
+            } else {
+                baseIcon = IconCacheService.shared.icon(forBundleIdentifier: bundleIdentifier)
+            }
+
+            let icon = baseIcon.copy() as? NSImage ?? baseIcon
             icon.size = NSSize(width: 16, height: 16)
             return icon
         }

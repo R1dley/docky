@@ -37,6 +37,16 @@ final class IconCacheService {
         return image
     }
 
+    func image(forImageFileURL url: URL) -> NSImage? {
+        let key = "image:\(url.path)" as NSString
+        if let cached = cache.object(forKey: key) { return cached }
+        guard let image = NSImage(contentsOf: url) else {
+            return nil
+        }
+        cache.setObject(image, forKey: key)
+        return image
+    }
+
     func invalidate() {
         cache.removeAllObjects()
     }

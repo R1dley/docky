@@ -49,6 +49,11 @@ private final class SettingsTabViewController: NSTabViewController {
             view: BehaviorSettingsView()
         ))
         addTabViewItem(makeTab(
+            label: "App Icons",
+            imageName: "app.badge",
+            view: AppIconsSettingsView()
+        ))
+        addTabViewItem(makeTab(
             label: "Permissions",
             imageName: "lock.shield",
             view: PermissionsSettingsView()

@@ -376,6 +376,21 @@ enum DockTileIndicatorShape: String, CaseIterable, Identifiable {
     }
 }
 
+struct AppIconOverride: Codable, Equatable, Identifiable {
+    let bundleIdentifier: String
+    let iconPath: String
+
+    var id: String { bundleIdentifier }
+
+    var effectiveIconURL: URL? {
+        guard !iconPath.isEmpty, FileManager.default.fileExists(atPath: iconPath) else {
+            return nil
+        }
+
+        return URL(fileURLWithPath: iconPath)
+    }
+}
+
 struct DockColor: Codable, Equatable {
     let red: Double
     let green: Double
@@ -573,6 +588,14 @@ final class DockyPreferences: ObservableObject {
         }
     }
 
+    /// Optional per-app icon overrides used by app tiles.
+    @Published var appIconOverrides: [AppIconOverride] {
+        didSet {
+            guard appIconOverrides != oldValue else { return }
+            persistAppIconOverrides(appIconOverrides)
+        }
+    }
+
     /// Whether opened apps from an app folder should appear grouped beside that folder.
     @Published var showsGroupedOpenedAppsInDock: Bool {
         didSet {
@@ -660,6 +683,35 @@ final class DockyPreferences: ObservableObject {
         return URL(fileURLWithPath: activeIndicatorImagePath)
     }
 
+    func appIconOverride(forBundleIdentifier bundleIdentifier: String) -> AppIconOverride? {
+        appIconOverrides.first { $0.bundleIdentifier == bundleIdentifier }
+    }
+
+    func effectiveAppIconOverrideURL(forBundleIdentifier bundleIdentifier: String) -> URL? {
+        appIconOverride(forBundleIdentifier: bundleIdentifier)?.effectiveIconURL
+    }
+
+    func setAppIconOverride(bundleIdentifier: String, iconPath: String) {
+        guard !bundleIdentifier.isEmpty, !iconPath.isEmpty else {
+            return
+        }
+
+        var overridesByBundleIdentifier = Dictionary(uniqueKeysWithValues: appIconOverrides.map {
+            ($0.bundleIdentifier, $0)
+        })
+        overridesByBundleIdentifier[bundleIdentifier] = AppIconOverride(
+            bundleIdentifier: bundleIdentifier,
+            iconPath: iconPath
+        )
+        appIconOverrides = overridesByBundleIdentifier.values.sorted {
+            $0.bundleIdentifier.localizedCaseInsensitiveCompare($1.bundleIdentifier) == .orderedAscending
+        }
+    }
+
+    func removeAppIconOverride(bundleIdentifier: String) {
+        appIconOverrides.removeAll { $0.bundleIdentifier == bundleIdentifier }
+    }
+
     static var defaultWindowTintColor: NSColor {
         NSColor.windowBackgroundColor.blended(withFraction: 0.18, of: .black) ?? .windowBackgroundColor
     }
@@ -678,6 +730,7 @@ final class DockyPreferences: ObservableObject {
         static let activeIndicatorShape = "docky.activeIndicatorShape"
         static let activeIndicatorImagePath = "docky.activeIndicatorImagePath"
         static let activeIndicatorColor = "docky.activeIndicatorColor"
+        static let appIconOverrides = "docky.appIconOverrides"
         static let showsGroupedOpenedAppsInDock = "docky.showsGroupedOpenedAppsInDock"
         static let pinnedAppBundleIdentifiers = "docky.pinnedAppBundleIdentifiers"
         static let pinnedItems = "docky.pinnedItems"
@@ -699,6 +752,7 @@ final class DockyPreferences: ObservableObject {
         static let activeIndicatorShape: DockTileIndicatorShape = .dot
         static let activeIndicatorImagePath: String? = nil
         static let activeIndicatorColor: DockColor? = nil
+        static let appIconOverrides: [AppIconOverride] = []
         static let showsGroupedOpenedAppsInDock = true
         static let pinnedAppBundleIdentifiers: [String] = []
         static let pinnedItems: [PinnedTileItem] = []
@@ -721,6 +775,7 @@ final class DockyPreferences: ObservableObject {
         let storedActiveIndicatorShape = defaults.string(forKey: Keys.activeIndicatorShape)
         let storedActiveIndicatorImagePath = defaults.string(forKey: Keys.activeIndicatorImagePath)
         let storedActiveIndicatorColor = defaults.data(forKey: Keys.activeIndicatorColor)
+        let storedAppIconOverrides = defaults.data(forKey: Keys.appIconOverrides)
         let storedShowsGroupedOpenedAppsInDock = defaults.object(forKey: Keys.showsGroupedOpenedAppsInDock) as? Bool
         let storedPinnedAppBundleIdentifiers = defaults.stringArray(forKey: Keys.pinnedAppBundleIdentifiers)
         let storedPinnedItems = defaults.data(forKey: Keys.pinnedItems)
@@ -742,6 +797,7 @@ final class DockyPreferences: ObservableObject {
         self.activeIndicatorShape = (storedActiveIndicatorShape.flatMap(DockTileIndicatorShape.init(rawValue:)) ?? DefaultValues.activeIndicatorShape)
         self.activeIndicatorImagePath = storedActiveIndicatorImagePath ?? DefaultValues.activeIndicatorImagePath
         self.activeIndicatorColor = Self.decodeColor(from: storedActiveIndicatorColor) ?? DefaultValues.activeIndicatorColor
+        self.appIconOverrides = Self.decodeAppIconOverrides(from: storedAppIconOverrides) ?? DefaultValues.appIconOverrides
         self.showsGroupedOpenedAppsInDock = storedShowsGroupedOpenedAppsInDock ?? DefaultValues.showsGroupedOpenedAppsInDock
         self.pinnedAppBundleIdentifiers = initialPinnedAppBundleIdentifiers
         self.pinnedItems = initialPinnedItems
@@ -763,6 +819,7 @@ final class DockyPreferences: ObservableObject {
         activeIndicatorShape = DefaultValues.activeIndicatorShape
         activeIndicatorImagePath = DefaultValues.activeIndicatorImagePath
         activeIndicatorColor = DefaultValues.activeIndicatorColor
+        appIconOverrides = DefaultValues.appIconOverrides
         showsGroupedOpenedAppsInDock = DefaultValues.showsGroupedOpenedAppsInDock
     }
 
@@ -821,6 +878,15 @@ final class DockyPreferences: ObservableObject {
         defaults.set(data, forKey: Keys.activeIndicatorColor)
     }
 
+    private func persistAppIconOverrides(_ overrides: [AppIconOverride]) {
+        guard let data = try? encoder.encode(overrides) else {
+            defaults.removeObject(forKey: Keys.appIconOverrides)
+            return
+        }
+
+        defaults.set(data, forKey: Keys.appIconOverrides)
+    }
+
     private static func decodeColor(from data: Data?) -> DockColor? {
         guard let data else {
             return nil
@@ -835,6 +901,14 @@ final class DockyPreferences: ObservableObject {
         }
 
         return try? JSONDecoder().decode([WidgetPlacement].self, from: data)
+    }
+
+    private static func decodeAppIconOverrides(from data: Data?) -> [AppIconOverride]? {
+        guard let data else {
+            return nil
+        }
+
+        return try? JSONDecoder().decode([AppIconOverride].self, from: data)
     }
 
     private static func decodePinnedItems(from data: Data?) -> [PinnedTileItem]? {

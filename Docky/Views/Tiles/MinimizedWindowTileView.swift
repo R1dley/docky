@@ -8,6 +8,7 @@ import SwiftUI
 
 struct MinimizedWindowTileView: View {
     let tile: MinimizedWindowTile
+    @ObservedObject private var preferences = DockyPreferences.shared
     @ObservedObject private var workspace = WorkspaceService.shared
 
     var body: some View {
@@ -16,7 +17,7 @@ struct MinimizedWindowTileView: View {
                 previewCard(in: geo.size)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
 
-                Image(nsImage: IconCacheService.shared.icon(forBundleIdentifier: tile.bundleIdentifier))
+                Image(nsImage: icon)
                     .resizable()
                     .interpolation(.high)
                     .aspectRatio(contentMode: .fit)
@@ -50,5 +51,14 @@ struct MinimizedWindowTileView: View {
             }
         }
         .frame(width: cardSize.width, height: cardSize.height)
+    }
+
+    private var icon: NSImage {
+        if let overrideURL = preferences.effectiveAppIconOverrideURL(forBundleIdentifier: tile.bundleIdentifier),
+           let overrideImage = IconCacheService.shared.image(forImageFileURL: overrideURL) {
+            return overrideImage
+        }
+
+        return IconCacheService.shared.icon(forBundleIdentifier: tile.bundleIdentifier)
     }
 }
