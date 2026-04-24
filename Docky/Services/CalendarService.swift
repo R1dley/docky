@@ -19,6 +19,7 @@ final class CalendarService: ObservableObject {
     private let eventStore = EKEventStore()
     private var lastRefreshDate: Date?
     private var cancellables = Set<AnyCancellable>()
+    private var rolloverTimer: Timer?
 
     private init() {
         authorizationStatus = EKEventStore.authorizationStatus(for: .event)
@@ -137,6 +138,28 @@ final class CalendarService: ObservableObject {
         self.lastRefreshDate = now
         self.isLoading = false
         self.lastErrorDescription = nil
+        scheduleRollover(after: nextEvent?.endDate)
+    }
+
+    private func scheduleRollover(after endDate: Date?) {
+        rolloverTimer?.invalidate()
+        rolloverTimer = nil
+
+        guard let endDate else { return }
+
+        let fireDate = endDate.addingTimeInterval(1)
+        if fireDate <= Date() {
+            DispatchQueue.main.async { [weak self] in
+                self?.refresh(force: true)
+            }
+            return
+        }
+
+        let timer = Timer(fire: fireDate, interval: 0, repeats: false) { [weak self] _ in
+            self?.refresh(force: true)
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        rolloverTimer = timer
     }
 }
 
