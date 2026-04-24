@@ -1139,7 +1139,12 @@ final class TileStore: ObservableObject {
     }
 
     private func refreshTrailingTilesFromPreferences() {
-        trailingTiles = preferences.trailingItems.compactMap(trailingTile(for:))
+        var visibleItems = preferences.trailingItems
+        if !visibleItems.contains(where: { $0.kind == .trash }) {
+            visibleItems.append(.trash())
+        }
+
+        trailingTiles = visibleItems.compactMap(trailingTile(for:))
     }
 
     private func suggestAppFolderNameIfNeeded(folderID: String, expectedDisplayName: String, apps: [AppTile]) {
