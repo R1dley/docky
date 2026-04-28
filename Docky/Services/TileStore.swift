@@ -296,15 +296,17 @@ final class TileStore: ObservableObject {
         let downloadsURL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Downloads", isDirectory: true)
         preferences.pinnedItems = pinnedItems
-        preferences.trailingItems = [
-            .smartStack(),
-            .folder(
-                url: downloadsURL,
-                displayName: "Downloads",
-                displayMode: .folder,
-                contentViewMode: .grid
-            )
-        ]
+        var trailingItems: [TrailingTileItem] = []
+        if ProductService.shared.availability(for: .smartStack, context: .newPlacement).allowsNewPlacement {
+            trailingItems.append(.smartStack())
+        }
+        trailingItems.append(.folder(
+            url: downloadsURL,
+            displayName: "Downloads",
+            displayMode: .folder,
+            contentViewMode: .grid
+        ))
+        preferences.trailingItems = trailingItems
         refreshPinnedTilesFromPreferences()
         refreshTrailingTilesFromPreferences()
         rebuildTiles()
@@ -577,6 +579,10 @@ final class TileStore: ObservableObject {
         ownerBundleIdentifier: String,
         span: TileSpan
     ) {
+        guard ProductService.shared.availability(for: kind.productFeature, context: .newPlacement).allowsNewPlacement else {
+            return
+        }
+
         var placements = preferences.widgetPlacements.filter {
             !($0.kind == kind && $0.ownerBundleIdentifier == ownerBundleIdentifier)
         }
@@ -601,11 +607,19 @@ final class TileStore: ObservableObject {
         }
 
         var candidates = WidgetCatalog.staticRegistrations
+            .filter {
+                ProductService.shared.availability(for: $0.kind.productFeature, context: .newPlacement).allowsNewPlacement
+            }
             .filter { $0.ownerBundleIdentifier == bundleIdentifier }
             .map { $0.makeTile() }
 
-        if mediaPlayback.state(for: bundleIdentifier) != nil
-            || appWidgetDisplay(bundleIdentifier: bundleIdentifier)?.kind == .nowPlaying {
+        let canPlaceNowPlayingWidget = ProductService.shared.availability(
+            for: WidgetKind.nowPlaying.productFeature,
+            context: .newPlacement
+        ).allowsNewPlacement
+
+        if canPlaceNowPlayingWidget,
+           mediaPlayback.state(for: bundleIdentifier) != nil || appWidgetDisplay(bundleIdentifier: bundleIdentifier)?.kind == .nowPlaying {
             candidates.append(Self.makeWidgetTile(
                 kind: .nowPlaying,
                 ownerBundleIdentifier: bundleIdentifier,
@@ -622,6 +636,7 @@ final class TileStore: ObservableObject {
 
     func setAppWidgetDisplay(bundleIdentifier: String, kind: WidgetKind) {
         guard !bundleIdentifier.isEmpty,
+              ProductService.shared.availability(for: kind.productFeature, context: .newPlacement).allowsNewPlacement,
               !isAppInFolder(bundleIdentifier: bundleIdentifier) else {
             return
         }
@@ -678,8 +693,14 @@ final class TileStore: ObservableObject {
         case .app, .appFolder, .widget:
             return
         case .launchpad:
+            guard ProductService.shared.availability(for: .launchpad, context: .newPlacement).allowsNewPlacement else {
+                return
+            }
             item = .launchpad()
         case .smartStack:
+            guard ProductService.shared.availability(for: .smartStack, context: .newPlacement).allowsNewPlacement else {
+                return
+            }
             item = .smartStack()
         case .spacer:
             item = .spacer()
@@ -1749,7 +1770,7 @@ final class TileStore: ObservableObject {
             }
         }
 
-        guard preferences.showsGroupedOpenedAppsInDock else {
+        guard ProductService.shared.isUnlocked(.groupedAppFolders), preferences.showsGroupedOpenedAppsInDock else {
             return []
         }
 
@@ -1833,6 +1854,8 @@ final class TileStore: ObservableObject {
     private func allSmartStackWidgets() -> [WidgetTile] {
         let staticWidgets = WidgetCatalog.smartStackRegistrations.map {
             $0.makeTile()
+        }.filter {
+            ProductService.shared.availability(for: $0.kind.productFeature).isUnlocked
         }
 
         let nowPlayingWidgets = mediaPlayback.statesByBundleIdentifier.values
@@ -1844,6 +1867,9 @@ final class TileStore: ObservableObject {
                     ownerBundleIdentifier: state.bundleIdentifier,
                     span: .three
                 )
+            }
+            .filter {
+                ProductService.shared.availability(for: $0.kind.productFeature).isUnlocked
             }
 
         return staticWidgets + nowPlayingWidgets

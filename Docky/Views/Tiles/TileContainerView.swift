@@ -15,6 +15,7 @@ struct TileContainerView: View {
     @ObservedObject private var layout = DockLayoutService.shared
     @ObservedObject private var preferences = DockyPreferences.shared
     @ObservedObject private var editMode = DockEditModeService.shared
+    @ObservedObject private var product = ProductService.shared
 
     @State private var draggedTileID: String?
     @State private var draggedTileOffset: CGFloat = 0
@@ -406,6 +407,11 @@ struct TileContainerView: View {
             return nil
         }
 
+        if let feature = paletteDrag.item.productFeature,
+           !product.availability(for: feature, context: .newPlacement).allowsNewPlacement {
+            return nil
+        }
+
         switch paletteDrag.item {
         case .launchpad:
             return Tile(
@@ -776,6 +782,11 @@ struct TileContainerView: View {
     }
 
     private func makePinnedItem(from paletteItem: DockEditPaletteItem, widgetSpan: TileSpan?) -> PinnedTileItem? {
+        if let feature = paletteItem.productFeature,
+           !product.availability(for: feature, context: .newPlacement).allowsNewPlacement {
+            return nil
+        }
+
         return switch paletteItem {
         case .launchpad:
             PinnedTileItem.launchpad()
@@ -800,6 +811,11 @@ struct TileContainerView: View {
 
     private func makeTrailingItem(from paletteDrag: DockEditPaletteDrag?) -> TrailingTileItem? {
         guard let paletteDrag else {
+            return nil
+        }
+
+        if let feature = paletteDrag.item.productFeature,
+           !product.availability(for: feature, context: .newPlacement).allowsNewPlacement {
             return nil
         }
 

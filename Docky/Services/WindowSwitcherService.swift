@@ -59,6 +59,11 @@ final class WindowSwitcherService: ObservableObject {
     }
 
     func handleHotKeyPress(direction: Int) {
+        guard ProductService.shared.isUnlocked(.windowSwitcher) else {
+            dismiss()
+            return
+        }
+
         guard DockyPreferences.shared.enablesWindowSwitcher else {
             dismiss()
             return

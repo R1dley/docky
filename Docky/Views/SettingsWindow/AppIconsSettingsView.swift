@@ -9,11 +9,16 @@ import UniformTypeIdentifiers
 
 struct AppIconsSettingsView: View {
     @ObservedObject private var preferences = DockyPreferences.shared
+    @ObservedObject private var product = ProductService.shared
     @ObservedObject private var workspace = WorkspaceService.shared
 
     var body: some View {
         Form {
             Section("Overrides") {
+                if !product.isUnlocked(.customAppIcons) {
+                    ProFeatureNotice(feature: .customAppIcons)
+                }
+
                 Text("Choose a custom image for any app Docky currently knows about. Custom app icons follow Docky's circle tile clipping when circle tiles are enabled.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -75,6 +80,7 @@ private struct AppIconOverrideRow: View {
     let entry: AppIconSettingsEntry
 
     @ObservedObject private var preferences = DockyPreferences.shared
+    @ObservedObject private var product = ProductService.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -106,11 +112,13 @@ private struct AppIconOverrideRow: View {
                     Button("Choose Image...") {
                         chooseOverrideImage()
                     }
+                    .disabled(!product.isUnlocked(.customAppIcons))
 
                     if overrideEntry != nil {
                         Button("Clear") {
                             preferences.removeAppIconOverride(bundleIdentifier: entry.bundleIdentifier)
                         }
+                        .disabled(!product.isUnlocked(.customAppIcons))
                     }
                 }
             }

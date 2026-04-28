@@ -7,6 +7,7 @@ import SwiftUI
 
 struct BehaviorSettingsView: View {
     @ObservedObject private var preferences = DockyPreferences.shared
+    @ObservedObject private var product = ProductService.shared
 
     var body: some View {
         Form {
@@ -118,9 +119,14 @@ struct BehaviorSettingsView: View {
             }
 
             Section("App Folders") {
+                if !product.isUnlocked(.groupedAppFolders) {
+                    ProFeatureNotice(feature: .groupedAppFolders)
+                }
+
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Shows Grouped Opened Apps In Dock", isOn: $preferences.showsGroupedOpenedAppsInDock)
                         .font(.headline)
+                        .disabled(!product.isUnlocked(.groupedAppFolders))
 
                     Text("Shows running apps from an app folder immediately to the right of that folder, and lets the folder reflect how many grouped apps are open.")
                         .foregroundStyle(.secondary)

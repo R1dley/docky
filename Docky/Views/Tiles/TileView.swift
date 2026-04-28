@@ -15,6 +15,7 @@ struct TileView: View {
     @ObservedObject private var dockSettings = DockSettingsService.shared
     @ObservedObject private var layout = DockLayoutService.shared
     @ObservedObject private var preferences = DockyPreferences.shared
+    @ObservedObject private var product = ProductService.shared
     @ObservedObject private var workspace = WorkspaceService.shared
     @ObservedObject private var mediaPlayback = MediaPlaybackService.shared
     @State private var isHovering = false
@@ -36,11 +37,16 @@ struct TileView: View {
         self._dockSettings = ObservedObject(wrappedValue: DockSettingsService.shared)
         self._layout = ObservedObject(wrappedValue: DockLayoutService.shared)
         self._preferences = ObservedObject(wrappedValue: DockyPreferences.shared)
+        self._product = ObservedObject(wrappedValue: ProductService.shared)
         self._workspace = ObservedObject(wrappedValue: WorkspaceService.shared)
         self._mediaPlayback = ObservedObject(wrappedValue: MediaPlaybackService.shared)
     }
 
     private func contextActions(modifierFlags: NSEvent.ModifierFlags) -> [ContextAction] {
+        if lockedProductFeature != nil {
+            return lockedContextActions()
+        }
+
         if let catalogActions = MenuCatalogService.shared.contextActions(for: tile, modifierFlags: modifierFlags) {
             switch tile.content {
             case .app(let app):
@@ -272,13 +278,77 @@ struct TileView: View {
         }
     }
 
+    private var lockedProductFeature: ProductFeature? {
+        if case .app(let app) = tile.content,
+           let displayedWidget = app.displayedWidget,
+           product.availability(for: displayedWidget.kind.productFeature, context: .existingPlacement) == .lockedExisting {
+            return displayedWidget.kind.productFeature
+        }
+
+        switch tile.content {
+        case .launchpad:
+            let feature = ProductFeature.launchpad
+            return product.availability(for: feature, context: .existingPlacement) == .lockedExisting ? feature : nil
+        case .widget(let widget):
+            let feature = widget.kind.productFeature
+            return product.availability(for: feature, context: .existingPlacement) == .lockedExisting ? feature : nil
+        case .smartStack:
+            let feature = ProductFeature.smartStack
+            return product.availability(for: feature, context: .existingPlacement) == .lockedExisting ? feature : nil
+        case .app, .minimizedWindow, .appFolder, .folder, .spacer, .divider, .trash:
+            return nil
+        }
+    }
+
+    private var isLockedProductPlacement: Bool {
+        lockedProductFeature != nil
+    }
+
+    private func lockedContextActions() -> [ContextAction] {
+        var actions: [ContextAction] = [
+            .action("Unlock Docky Pro") {
+                openProductSettings()
+            }
+        ]
+
+        switch tile.content {
+        case .app(let app) where app.displayedWidget != nil:
+            actions.append(.divider)
+            actions.append(.action("Show App Icon") {
+                TileStore.shared.removeAppWidgetDisplay(bundleIdentifier: app.bundleIdentifier)
+            })
+        case .launchpad, .widget, .smartStack:
+            if isDockyPinnedTile || isDockyTrailingTile {
+                actions.append(.divider)
+                actions.append(.action("Remove from Dock") {
+                    removeDockyTile()
+                })
+            }
+        case .app, .minimizedWindow, .appFolder, .folder, .spacer, .divider, .trash:
+            break
+        }
+
+        return actions
+    }
+
+    private func openProductSettings() {
+        (NSApp.delegate as? AppDelegate)?.showSettingsWindow(nil)
+    }
+
     var body: some View {
         laidOutContent
+            .opacity(isLockedProductPlacement ? 0.38 : 1)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .overlay(alignment: runningIndicatorAlignment) {
                 runningIndicator
                     .padding(runningIndicatorEdge, runningIndicatorInset)
                     .offset(y: -max((layout.scaled(preferences.tileVerticalPadding) / 2), 2))
+            }
+            .overlay {
+                if isLockedProductPlacement {
+                    LockedProductTileOverlay()
+                        .allowsHitTesting(false)
+                }
             }
             .contentShape(Rectangle())
             .onHover(perform: updateHoverState)
@@ -376,7 +446,7 @@ struct TileView: View {
         switch tile.content {
         case .app(let app) where app.displayedWidget != nil:
             GeometryReader { proxy in
-                content
+                displayedContent
                     .frame(
                         width: max(0, proxy.size.width - contentInsets.width * 2),
                         height: max(0, proxy.size.height - contentInsets.height * 2)
@@ -385,7 +455,7 @@ struct TileView: View {
             }
         case .appFolder, .launchpad, .widget, .smartStack:
             GeometryReader { proxy in
-                content
+                displayedContent
                     .frame(
                         width: max(0, proxy.size.width - contentInsets.width * 2),
                         height: max(0, proxy.size.height - contentInsets.height * 2)
@@ -394,13 +464,18 @@ struct TileView: View {
             }
         case .folder, .trash:
             GeometryReader { _ in
-                content
+                displayedContent
                     .padding(contentPaddingEdges, contentPadding)
             }
         case .app, .minimizedWindow, .spacer, .divider:
-            content
+            displayedContent
                 .padding(contentPaddingEdges, contentPadding)
         }
+    }
+
+    private var displayedContent: some View {
+        content
+            .allowsHitTesting(!isLockedProductPlacement)
     }
 
     @ViewBuilder
@@ -724,6 +799,12 @@ struct TileView: View {
     }
 
     private func handleTap() {
+        if isLockedProductPlacement {
+            isTooltipPresented = false
+            openProductSettings()
+            return
+        }
+
         switch tile.content {
         case .app(let app):
             isTooltipPresented = false
@@ -1399,6 +1480,22 @@ struct TileView: View {
         }
     }
 
+}
+
+private struct LockedProductTileOverlay: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "lock.fill")
+                .font(.callout.weight(.semibold))
+            Text("Pro")
+                .font(.caption.weight(.semibold))
+                .offset(y: 1)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.black.opacity(0.62), in: .capsule)
+    }
 }
 
 private struct TileTooltipView: View {

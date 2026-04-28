@@ -78,6 +78,7 @@ private enum DockEditorPreviewScale: Equatable {
 
 private struct DockEditorGalleryItem: Equatable, Identifiable {
     let paletteItem: DockEditPaletteItem
+    let feature: ProductFeature?
     let title: String
     let subtitle: String
     let iconName: String
@@ -154,6 +155,7 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
         )
         return Self(
             paletteItem: paletteItem,
+            feature: registration.kind.productFeature,
             title: registration.kind.title,
             subtitle: subtitle(for: registration.kind),
             iconName: iconName(for: paletteItem),
@@ -173,6 +175,7 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
         let paletteItem = DockEditPaletteItem.smartStack
         return Self(
             paletteItem: paletteItem,
+            feature: .smartStack,
             title: "Smart Stack",
             subtitle: "Stacks available widgets into a single tile you can scroll through.",
             iconName: iconName(for: paletteItem),
@@ -191,6 +194,7 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
     nonisolated private static func makeUtilityItem(_ paletteItem: DockEditPaletteItem) -> Self {
         Self(
             paletteItem: paletteItem,
+            feature: paletteItem.productFeature,
             title: title(for: paletteItem),
             subtitle: subtitle(for: paletteItem),
             iconName: iconName(for: paletteItem),
@@ -751,6 +755,11 @@ private struct DockEditorBrowserView: View {
     }
 
     private func startDrag(for variant: DockEditorGalleryVariant) -> NSItemProvider {
+        if let feature = variant.item.feature,
+           !ProductService.shared.availability(for: feature, context: .newPlacement).allowsNewPlacement {
+            return NSItemProvider()
+        }
+
         editMode.beginPaletteDrag(item: variant.item.paletteItem, widgetSpan: variant.span)
         return NSItemProvider(object: variant.id as NSString)
     }
@@ -760,15 +769,41 @@ private struct DockEditorGalleryVariantCard: View {
     let variant: DockEditorGalleryVariant
     let onDrag: () -> NSItemProvider
 
+    @ObservedObject private var product = ProductService.shared
+
+    private var availability: ProductAvailability {
+        guard let feature = variant.item.feature else {
+            return .available
+        }
+
+        return product.availability(for: feature, context: .newPlacement)
+    }
+
+    private var allowsNewPlacement: Bool {
+        availability.allowsNewPlacement
+    }
+
+    private var showsProBadge: Bool {
+        variant.item.feature?.requiredTier == .pro
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             ZStack {
-                DockEditorItemPreview(item: variant.item, selectedSpan: variant.span, scale: .card)
-                    .onDrag(onDrag)
+                if allowsNewPlacement {
+                    DockEditorItemPreview(item: variant.item, selectedSpan: variant.span, scale: .card)
+                        .onDrag(onDrag)
+                } else {
+                    DockEditorItemPreview(item: variant.item, selectedSpan: variant.span, scale: .card)
+                }
             }
             .frame(maxWidth: .infinity, minHeight: DockEditorPreviewScale.card.canvasHeight)
 
             VStack(alignment: .center, spacing: 4) {
+                if showsProBadge {
+                    ProBadge()
+                }
+
                 Text(variant.title)
                     .font(.headline)
 
@@ -777,11 +812,22 @@ private struct DockEditorGalleryVariantCard: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if !allowsNewPlacement {
+                    Text("Unlock Pro to add")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+        .opacity(allowsNewPlacement ? 1 : 0.68)
+        .onTapGesture {
+            guard !allowsNewPlacement else { return }
+            (NSApp.delegate as? AppDelegate)?.showSettingsWindow(nil)
+        }
     }
 }
 

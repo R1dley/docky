@@ -7,9 +7,16 @@ import SwiftUI
 
 struct ActionCatalogSettingsView: View {
     @ObservedObject private var catalog = MenuCatalogService.shared
+    @ObservedObject private var product = ProductService.shared
 
     var body: some View {
         Form {
+            if !product.isUnlocked(.scriptedActions) {
+                Section {
+                    ProFeatureNotice(feature: .scriptedActions)
+                }
+            }
+
             Section("Catalog Packages") {
                 if catalog.packageSummaries.isEmpty {
                     Text("No catalog packages loaded.")
@@ -53,6 +60,7 @@ struct ActionCatalogSettingsView: View {
                     Button("Reload Catalog") {
                         catalog.reload()
                     }
+                    .disabled(!product.isUnlocked(.scriptedActions))
                 }
             }
 

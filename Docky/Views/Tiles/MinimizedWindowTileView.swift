@@ -27,6 +27,7 @@ struct MinimizedWindowTileView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .offset(x: 2, y: 2)
             }
+            .padding(.horizontal, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

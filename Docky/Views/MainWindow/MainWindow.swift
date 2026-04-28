@@ -91,13 +91,28 @@ final class MainWindow: NSWindow {
     private var isPointerInsideWindow = false
     private var activeInteractionCount = 0
     private var visibilityState: VisibilityState
+    private var hasCompletedSetup = false
+    private var hasResolvedInitialFrame = false
 
     override init(contentRect: NSRect, styleMask style: NSWindow.StyleMask, backing backingStoreType: NSWindow.BackingStoreType, defer flag: Bool) {
         visibilityState = DockyPreferences.shared.autohidesWindow ? .hidden : .visible
         super.init(contentRect: contentRect, styleMask: style, backing: backingStoreType, defer: flag)
+        performSetupIfNeeded()
+    }
+
+    override func awakeFromNib() {
+        super.awakeFromNib()
+        applyCurrentFrame(animated: false)
+    }
+
+    private func performSetupIfNeeded() {
+        guard !hasCompletedSetup else { return }
+        hasCompletedSetup = true
+
         backgroundColor = .clear
         isOpaque = false
         isMovableByWindowBackground = false
+        alphaValue = 0
         observeFrameInputs()
         observeVisibilityInputs()
     }
@@ -330,8 +345,11 @@ final class MainWindow: NSWindow {
     }
 
     private func applyFrame(_ frame: CGRect, animated: Bool, duration: TimeInterval?) {
-        guard animated else {
+        let shouldAnimate = animated && hasResolvedInitialFrame
+
+        guard shouldAnimate else {
             setFrame(frame, display: true, animate: false)
+            revealAfterInitialFrameIfNeeded()
             return
         }
 
@@ -340,6 +358,12 @@ final class MainWindow: NSWindow {
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             animator().setFrame(frame, display: true)
         }
+    }
+
+    private func revealAfterInitialFrameIfNeeded() {
+        guard !hasResolvedInitialFrame else { return }
+        hasResolvedInitialFrame = true
+        alphaValue = 1
     }
 
     private var autohideAnimationDuration: TimeInterval {

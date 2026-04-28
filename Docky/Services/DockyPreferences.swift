@@ -842,7 +842,11 @@ final class DockyPreferences: ObservableObject {
     }
 
     func appIconOverride(forBundleIdentifier bundleIdentifier: String) -> AppIconOverride? {
-        appIconOverrides.first { $0.bundleIdentifier == bundleIdentifier }
+        guard ProductService.shared.isUnlocked(.customAppIcons) else {
+            return nil
+        }
+
+        return appIconOverrides.first { $0.bundleIdentifier == bundleIdentifier }
     }
 
     func effectiveAppIconOverrideURL(forBundleIdentifier bundleIdentifier: String) -> URL? {
@@ -850,6 +854,10 @@ final class DockyPreferences: ObservableObject {
     }
 
     func setAppIconOverride(bundleIdentifier: String, iconPath: String) {
+        guard ProductService.shared.isUnlocked(.customAppIcons) else {
+            return
+        }
+
         guard !bundleIdentifier.isEmpty, !iconPath.isEmpty else {
             return
         }

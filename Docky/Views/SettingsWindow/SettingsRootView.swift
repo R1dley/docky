@@ -6,6 +6,7 @@
 import SwiftUI
 
 private enum SettingsPane: String, CaseIterable, Identifiable {
+    case product
     case appearance
     case behavior
     case launchpad
@@ -18,6 +19,8 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
+        case .product:
+            "Product"
         case .appearance:
             "Appearance"
         case .behavior:
@@ -37,6 +40,8 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
 
     var symbolName: String {
         switch self {
+        case .product:
+            "shippingbox"
         case .appearance:
             "paintbrush"
         case .behavior:
@@ -56,6 +61,8 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
 
     var subtitle: String {
         switch self {
+        case .product:
+            "Register Docky Pro and review which features are gated."
         case .appearance:
             "Customize Docky’s look, chrome, and window tint."
         case .behavior:
@@ -73,17 +80,32 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         }
     }
     
-    static var allCases: [SettingsPane] = [.appearance, .behavior, .launchpad, .windowManagement, .appIcons, .permissions]
+    var isPro: Bool {
+        switch self {
+        case .launchpad, .windowManagement, .appIcons, .actions:
+            true
+        case .product, .appearance, .behavior, .permissions:
+            false
+        }
+    }
+
+    static var allCases: [SettingsPane] = [.product, .appearance, .behavior, .launchpad, .windowManagement, .appIcons, .permissions, .actions]
 }
 
 struct SettingsRootView: View {
-    @State private var selection: SettingsPane = .appearance
+    @State private var selection: SettingsPane = .product
 
     var body: some View {
         NavigationSplitView {
             List(SettingsPane.allCases, selection: $selection) { pane in
-                Label(pane.title, systemImage: pane.symbolName)
-                    .tag(pane)
+                HStack(spacing: 10) {
+                    Label(pane.title, systemImage: pane.symbolName)
+                    Spacer(minLength: 8)
+                    if pane.isPro {
+                        ProBadge()
+                    }
+                }
+                .tag(pane)
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
             .listStyle(.sidebar)
@@ -107,6 +129,8 @@ private struct SettingsDetailView: View {
     @ViewBuilder
     private var selectedView: some View {
         switch pane {
+        case .product:
+            ProductSettingsView()
         case .appearance:
             AppearanceSettingsView()
         case .behavior:
