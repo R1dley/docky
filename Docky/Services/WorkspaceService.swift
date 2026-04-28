@@ -178,8 +178,9 @@ final class WorkspaceService: ObservableObject {
             }
 
             let visibleWindow = AppWindow(
-                windowIdentifier: matchedWindow.windowIdentifier,
-                windowNumber: matchedWindow.windowNumber,
+                windowIdentifier: windowNumber.map { "\(matchedWindow.bundleIdentifier):\($0)" }
+                    ?? matchedWindow.windowIdentifier,
+                windowNumber: windowNumber ?? matchedWindow.windowNumber,
                 bundleIdentifier: matchedWindow.bundleIdentifier,
                 processIdentifier: matchedWindow.processIdentifier,
                 appDisplayName: matchedWindow.appDisplayName,
@@ -188,6 +189,18 @@ final class WorkspaceService: ObservableObject {
                 previewLookupIndex: matchedWindow.previewLookupIndex,
                 screenBounds: screenBounds
             )
+
+            if screenBounds.width < minimumSwitchableWindowSize.width
+                || screenBounds.height < minimumSwitchableWindowSize.height {
+                NSLog(
+                    "[Docky] Tiny switchable window candidate made it through app=%@ title=%@ id=%@ bounds=%@ windowNumber=%@",
+                    visibleWindow.bundleIdentifier,
+                    visibleWindow.windowTitle,
+                    visibleWindow.windowIdentifier,
+                    NSStringFromRect(screenBounds.integral),
+                    visibleWindow.windowNumber.map(String.init) ?? "nil"
+                )
+            }
 
             guard !visibleWindow.isMinimized,
                   !seenWindowIdentifiers.contains(visibleWindow.windowIdentifier) else {

@@ -37,13 +37,13 @@ final class TileStore: ObservableObject {
     private let mediaPlayback = MediaPlaybackService.shared
 
     private init() {
-        refresh()
+        reloadSystemDockState(syncPreferencesFromSystemDock: false)
         notificationObserver = DistributedNotificationCenter.default().addObserver(
             forName: Self.changeNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.refresh()
+            self?.reloadSystemDockState(syncPreferencesFromSystemDock: false)
         }
         WorkspaceService.shared.$runningApps
             .receive(on: DispatchQueue.main)
@@ -115,11 +115,17 @@ final class TileStore: ObservableObject {
     }
 
     func refresh() {
+        reloadSystemDockState(syncPreferencesFromSystemDock: true)
+    }
+
+    private func reloadSystemDockState(syncPreferencesFromSystemDock: Bool) {
         guard let plist = DockPlistReader.read() else {
+            dockPinnedTilesByBundleIdentifier = [:]
             pinnedTiles = []
             systemOtherTiles = []
             systemOtherTilesByID = [:]
-            trailingTiles = []
+            refreshPinnedTilesFromPreferences()
+            refreshTrailingTilesFromPreferences()
             rebuildTiles()
             return
         }
@@ -131,15 +137,19 @@ final class TileStore: ObservableObject {
         dockPinnedTilesByBundleIdentifier = Dictionary(uniqueKeysWithValues: refreshedPinnedTiles.compactMap { tile in
             bundleIdentifier(of: tile).map { ($0, tile) }
         })
-        seedPinnedPreferencesIfNeeded(from: refreshedPinnedTiles)
-        mergePinnedPreferencesAdditionsIfNeeded(from: refreshedPinnedTiles)
+        if syncPreferencesFromSystemDock {
+            seedPinnedPreferencesIfNeeded(from: refreshedPinnedTiles)
+            mergePinnedPreferencesAdditionsIfNeeded(from: refreshedPinnedTiles)
+        }
         synchronizeAppWidgetDisplaysWithFolders()
         refreshPinnedTilesFromPreferences()
         systemOtherTiles = others.enumerated().compactMap { index, entry in
             Self.parse(entry: entry, fallbackID: Self.fallbackTileID(for: entry, at: index, section: "persistent-others"))
         }
         systemOtherTilesByID = Dictionary(uniqueKeysWithValues: systemOtherTiles.map { ($0.id, $0) })
-        refreshTrailingPreferencesIfNeeded()
+        if syncPreferencesFromSystemDock {
+            refreshTrailingPreferencesIfNeeded()
+        }
         refreshTrailingTilesFromPreferences()
         rebuildTiles()
     }

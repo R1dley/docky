@@ -11,6 +11,7 @@ final class LaunchpadOverlayWindowController: NSWindowController {
     private weak var mainWindow: MainWindow?
     private var cancellables: Set<AnyCancellable> = []
     private var isInterruptingMainWindow = false
+    private let animationDuration: TimeInterval = 0.18
 
     init(mainWindow: MainWindow) {
         self.mainWindow = mainWindow
@@ -21,6 +22,7 @@ final class LaunchpadOverlayWindowController: NSWindowController {
 
         super.init(window: overlayWindow)
 
+        prepareOverlayWindow()
         observeOverlayPresentation()
         observeMainWindow()
     }
@@ -60,14 +62,52 @@ final class LaunchpadOverlayWindowController: NSWindowController {
 
         updateFrame()
         beginMainWindowInteraction()
-        showWindow(nil)
+        window.ignoresMouseEvents = false
         window.makeKeyAndOrderFront(nil)
+        animateWindowAlpha(to: 1)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     private func dismissOverlay() {
-        window?.orderOut(nil)
+        animateWindowAlpha(to: 0) { [weak self] in
+            guard let self, let window = self.window else { return }
+
+            window.ignoresMouseEvents = true
+            self.mainWindow?.makeKey()
+        }
         endMainWindowInteraction()
+    }
+
+    private func prepareOverlayWindow() {
+        guard let window else { return }
+
+        updateFrame()
+        configureHiddenWindowState()
+        window.orderFront(nil)
+    }
+
+    private func configureHiddenWindowState() {
+        guard let window else { return }
+
+        window.alphaValue = 0
+        window.ignoresMouseEvents = true
+    }
+
+    private func animateWindowAlpha(to alphaValue: CGFloat, completion: (() -> Void)? = nil) {
+        guard let window else {
+            completion?()
+            return
+        }
+
+        window.animator().alphaValue = window.alphaValue
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = animationDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            window.animator().alphaValue = alphaValue
+        } completionHandler: {
+            completion?()
+        }
     }
 
     private func updateFrame() {
@@ -382,10 +422,6 @@ private struct LaunchpadAppCard: View {
             if isSelected {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(.primary.opacity(0.12))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .strokeBorder(.primary.opacity(0.22), lineWidth: 1)
-                    }
             }
         }
         .contentShape(Rectangle())

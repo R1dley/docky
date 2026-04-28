@@ -10,6 +10,7 @@ import SwiftUI
 final class WindowSwitcherOverlayWindowController: NSWindowController {
     private weak var mainWindow: MainWindow?
     private var cancellables: Set<AnyCancellable> = []
+    private let animationDuration: TimeInterval = 0.18
 
     init(mainWindow: MainWindow) {
         self.mainWindow = mainWindow
@@ -20,6 +21,7 @@ final class WindowSwitcherOverlayWindowController: NSWindowController {
 
         super.init(window: overlayWindow)
 
+        prepareOverlayWindow()
         observeOverlayPresentation()
         observeMainWindow()
     }
@@ -58,13 +60,34 @@ final class WindowSwitcherOverlayWindowController: NSWindowController {
         guard let window else { return }
 
         updateFrame()
-        showWindow(nil)
+        window.alphaValue = 1
+        window.ignoresMouseEvents = false
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     private func dismissOverlay() {
-        window?.orderOut(nil)
+        animateWindowAlpha(to: 0) { [weak self] in
+            guard let self, let window = self.window else { return }
+
+            window.ignoresMouseEvents = true
+            self.mainWindow?.makeKey()
+        }
+    }
+
+    private func prepareOverlayWindow() {
+        guard let window else { return }
+
+        updateFrame()
+        configureHiddenWindowState()
+        window.orderFront(nil)
+    }
+
+    private func configureHiddenWindowState() {
+        guard let window else { return }
+
+        window.alphaValue = 0
+        window.ignoresMouseEvents = true
     }
 
     private func updateFrame() {
@@ -72,6 +95,21 @@ final class WindowSwitcherOverlayWindowController: NSWindowController {
         let screenFrame = mainWindow?.screen?.frame ?? NSScreen.main?.frame ?? .zero
         guard !screenFrame.isEmpty else { return }
         window.setFrame(screenFrame, display: true)
+    }
+
+    private func animateWindowAlpha(to alphaValue: CGFloat, completion: (() -> Void)? = nil) {
+        guard let window else {
+            completion?()
+            return
+        }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = animationDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            window.animator().alphaValue = alphaValue
+        } completionHandler: {
+            completion?()
+        }
     }
 }
 
@@ -139,6 +177,7 @@ private struct WindowSwitcherOverlayView: View {
                     }
                     .frame(maxWidth: max(0, proxy.size.width - 80))
                     .fixedSize(horizontal: true, vertical: true)
+                    .background(.primary.opacity(0.18))
                     .glassEffect(.regular, in: .rect(cornerRadius: containerCornerRadius, style: .continuous))
                     .clipShape(RoundedRectangle(cornerRadius: containerCornerRadius, style: .continuous))
                     .onChange(of: switcher.selectedWindowIdentifier) { _, selection in
@@ -215,8 +254,7 @@ private struct WindowSwitcherCard: View {
             }
             .frame(width: 180)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 12)
+        .padding(12)
         .background {
             RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
                 .fill(isSelected ? .white.opacity(0.14) : .white.opacity(0.0))

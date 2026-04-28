@@ -71,7 +71,25 @@ final class WindowSwitcherService: ObservableObject {
         }
 
         let previousSelectionIdentifier = selectedWindowIdentifier
-        windows = latestWindows
+        let currentState = windows.map(\.windowIdentifier)
+        let nextState = latestWindows.map(\.windowIdentifier)
+        let symmetricDifference = Set(windows.map(\.windowIdentifier))
+            .symmetricDifference(Set(latestWindows.map(\.windowIdentifier)))
+            .sorted()
+        if !symmetricDifference.isEmpty {
+            let currentSummary = currentState.isEmpty ? "  <empty>" : currentState.map { "  - \($0)" }.joined(separator: "\n")
+            let nextSummary = nextState.isEmpty ? "  <empty>" : nextState.map { "  - \($0)" }.joined(separator: "\n")
+            let diffSummary = symmetricDifference.isEmpty ? "  <empty>" : symmetricDifference.map { "  - \($0)" }.joined(separator: "\n")
+            NSLog(
+                "[Docky] Window switcher state changed\ncount=%d\nselected=%@\nsymmetricDiff:\n%@\ncurrent:\n%@\nnext:\n%@",
+                latestWindows.count,
+                previousSelectionIdentifier ?? "nil",
+                diffSummary,
+                currentSummary,
+                nextSummary
+            )
+            windows = latestWindows
+        }
 
         if isPresented {
             let currentIndex = previousSelectionIdentifier.flatMap { identifier in
