@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		11051E012F929079005CE09D /* Frameworks/MediaRemoteAdapter.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 11051E002F929079005CE09D /* Frameworks/MediaRemoteAdapter.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		113717682FA17B980012480C /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 113717672FA17B980012480C /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -42,6 +43,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				113717682FA17B980012480C /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -94,6 +96,7 @@
 			);
 			name = Docky;
 			packageProductDependencies = (
+				113717672FA17B980012480C /* Sparkle */,
 			);
 			productName = Docky;
 			productReference = 11051DE72F929079005CE09D /* Docky.app */;
@@ -123,6 +126,9 @@
 			);
 			mainGroup = 11051DDE2F929079005CE09D;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				113717662FA17B980012480C /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 11051DE82F929079005CE09D /* Products */;
 			projectDirPath = "";
@@ -314,6 +320,8 @@
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Docky uses reminders access to show your open tasks in the reminders widget.";
 				INFOPLIST_KEY_NSRemindersUsageDescription = "Docky uses reminders access to show your open tasks in the reminders widget.";
+				INFOPLIST_KEY_SUFeedURL = "https://docky.quintero.gt/appcast.xml";
+				INFOPLIST_KEY_SUPublicEDKey = "LfZUqraK4HiOj/+9iztgnWzdQTrC1ccmJPp/Fy/aTPc=";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -379,6 +387,8 @@
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Docky uses reminders access to show your open tasks in the reminders widget.";
 				INFOPLIST_KEY_NSRemindersUsageDescription = "Docky uses reminders access to show your open tasks in the reminders widget.";
+				INFOPLIST_KEY_SUFeedURL = "https://docky.quintero.gt/appcast.xml";
+				INFOPLIST_KEY_SUPublicEDKey = "LfZUqraK4HiOj/+9iztgnWzdQTrC1ccmJPp/Fy/aTPc=";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -426,6 +436,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		113717662FA17B980012480C /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		113717672FA17B980012480C /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 113717662FA17B980012480C /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 11051DDF2F929079005CE09D /* Project object */;
 }

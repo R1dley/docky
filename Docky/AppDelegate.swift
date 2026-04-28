@@ -7,9 +7,10 @@
 
 import Cocoa
 import Combine
+import Sparkle
 
 @main
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     @IBOutlet var window: NSWindow!
     private var mainWindowController: MainWindowController?
@@ -24,6 +25,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window?.orderOut(nil)
         NSApplication.shared.setActivationPolicy(.accessory)
         configureMainMenu()
+        _ = AppUpdateService.shared
         _ = ProductService.shared
         _ = LaunchpadHotKeyService.shared
 
@@ -63,6 +65,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindowController?.showWindow(sender)
         settingsWindowController?.window?.makeKeyAndOrderFront(sender)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func checkForUpdates(_ sender: Any?) {
+        AppUpdateService.shared.checkForUpdates()
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(checkForUpdates(_:)) {
+            return AppUpdateService.shared.canCheckForUpdates
+        }
+
+        return true
     }
 
     private func showPermissionsWindow(steps: [Permission]) {
@@ -111,6 +125,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             item.title = "Settings…"
             item.action = #selector(showSettingsWindow(_:))
             item.target = self
+        }
+
+        if appMenu?.item(withTitle: "Check for Updates…") == nil {
+            let item = NSMenuItem(
+                title: "Check for Updates…",
+                action: #selector(checkForUpdates(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            appMenu?.insertItem(item, at: 1)
         }
 
         #if DEBUG
@@ -230,6 +254,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         settingsItem.target = self
 
+        let checkForUpdatesItem = NSMenuItem(
+            title: "Check for Updates…",
+            action: #selector(checkForUpdates(_:)),
+            keyEquivalent: ""
+        )
+        checkForUpdatesItem.target = self
+
         let quitItem = NSMenuItem(
             title: "Quit Docky",
             action: #selector(NSApplication.terminate(_:)),
@@ -238,6 +269,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         quitItem.target = NSApp
 
         debugMenu.addItem(settingsItem)
+        debugMenu.addItem(checkForUpdatesItem)
         debugMenu.addItem(snapshotItem)
         debugMenu.addItem(loadTestItem)
         debugMenu.addItem(pinEveryAppItem)
