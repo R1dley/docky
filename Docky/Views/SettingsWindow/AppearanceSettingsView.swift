@@ -15,15 +15,20 @@ struct AppearanceSettingsView: View {
         Form {
             Section("Indicators") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Active Indicator Shape")
-                        .font(.headline)
+                    HStack {
+                        Text("Active Indicator Shape")
+                            .font(.headline)
+                        
+                        Spacer()
 
-                    Picker("Active Indicator Shape", selection: $preferences.activeIndicatorShape) {
-                        ForEach(DockTileIndicatorShape.allCases) { shape in
-                            Text(shape.title).tag(shape)
+                        Picker("Active Indicator Shape", selection: $preferences.activeIndicatorShape) {
+                            ForEach(DockTileIndicatorShape.allCases) { shape in
+                                Text(shape.title).tag(shape)
+                            }
                         }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
                     }
-                    .pickerStyle(.menu)
 
                     if preferences.activeIndicatorShape == .image {
                         HStack {
@@ -45,6 +50,8 @@ struct AppearanceSettingsView: View {
                     }
 
                     if showsIndicatorColorControls {
+                        Divider()
+
                         Toggle("Use Custom Indicator Color", isOn: usesCustomActiveIndicatorColorBinding)
                             .font(.headline)
 
@@ -62,16 +69,21 @@ struct AppearanceSettingsView: View {
 
             Section("Tile Layout") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Tile Clip Shape")
-                        .font(.headline)
+                    HStack {
+                        Text("Tile Clip Shape")
+                            .font(.headline)
+                        
+                        Spacer()
 
-                    Picker("Tile Clip Shape", selection: $preferences.tileClipShape) {
-                        ForEach(DockClipShape.allCases) { shape in
-                            Text(shape.title).tag(shape)
+                        Picker("Tile Clip Shape", selection: $preferences.tileClipShape) {
+                            ForEach(DockClipShape.allCases) { shape in
+                                Text(shape.title).tag(shape)
+                            }
                         }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
                     }
-                    .pickerStyle(.menu)
-
+                    
                     Text("Choose whether Docky tile chrome keeps the current rounded corners or uses a full circle or capsule clip.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -79,16 +91,22 @@ struct AppearanceSettingsView: View {
                 .padding(.vertical, 4)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Tile Vertical Padding")
-                        .font(.headline)
-
                     HStack {
-                        Slider(value: $preferences.tileVerticalPadding, in: 8...32, step: 1) {
-                            Text("Tile Vertical Padding")
+                        Text("Tile Vertical Padding")
+                            .font(.headline)
+                        
+                        Spacer()
+
+                        HStack {
+                            Slider(value: $preferences.tileVerticalPadding, in: 8...32, step: 1) {
+                                Text("Tile Vertical Padding")
+                            }
+                            .labelsHidden()
+                            
+                            Text("\(Int(preferences.tileVerticalPadding)) pt")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 48, alignment: .trailing)
                         }
-                        Text("\(Int(preferences.tileVerticalPadding)) pt")
-                            .foregroundStyle(.secondary)
-                            .frame(width: 48, alignment: .trailing)
                     }
 
                     Text("Controls the top and bottom inset inside each dock tile.")
@@ -98,16 +116,21 @@ struct AppearanceSettingsView: View {
                 .padding(.vertical, 4)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Tile Spacing")
-                        .font(.headline)
-
                     HStack {
-                        Slider(value: $preferences.tileSpacing, in: 0...16, step: 1) {
-                            Text("Tile Spacing")
+                        Text("Tile Spacing")
+                            .font(.headline)
+                        
+                        Spacer()
+
+                        HStack {
+                            Slider(value: $preferences.tileSpacing, in: 0...16, step: 1) {
+                                Text("Tile Spacing")
+                            }
+                            .labelsHidden()
+                            Text("\(Int(preferences.tileSpacing)) pt")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 48, alignment: .trailing)
                         }
-                        Text("\(Int(preferences.tileSpacing)) pt")
-                            .foregroundStyle(.secondary)
-                            .frame(width: 48, alignment: .trailing)
                     }
 
                     Text("Controls the horizontal gap between adjacent dock tiles.")
@@ -119,15 +142,20 @@ struct AppearanceSettingsView: View {
 
             Section("Window Shape") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Chrome Clip Shape")
-                        .font(.headline)
+                    HStack {
+                        Text("Chrome Clip Shape")
+                            .font(.headline)
+                        
+                        Spacer()
 
-                    Picker("Chrome Clip Shape", selection: $preferences.windowClipShape) {
-                        ForEach(DockClipShape.allCases) { shape in
-                            Text(shape.title).tag(shape)
+                        Picker("Chrome Clip Shape", selection: $preferences.windowClipShape) {
+                            ForEach(DockClipShape.allCases) { shape in
+                                Text(shape.title).tag(shape)
+                            }
                         }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
                     }
-                    .pickerStyle(.menu)
 
                     Text("Choose whether the dock chrome keeps the current rounded corners or uses a full circle or capsule clip.")
                         .foregroundStyle(.secondary)
@@ -136,16 +164,21 @@ struct AppearanceSettingsView: View {
                 .padding(.vertical, 4)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Window Corner Radius")
-                        .font(.headline)
-
                     HStack {
-                        Slider(value: windowCornerRadiusBinding, in: 0...maximumCornerRadius, step: 1) {
-                            Text("Window Corner Radius")
+                        Text("Window Corner Radius")
+                            .font(.headline)
+                        
+                        Spacer()
+
+                        HStack {
+                            Slider(value: windowCornerRadiusBinding, in: 0...maximumCornerRadius, step: 1) {
+                                Text("Window Corner Radius")
+                            }
+                            .labelsHidden()
+                            Text("\(Int(min(preferences.windowCornerRadius, maximumCornerRadius))) pt")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 48, alignment: .trailing)
                         }
-                        Text("\(Int(min(preferences.windowCornerRadius, maximumCornerRadius))) pt")
-                            .foregroundStyle(.secondary)
-                            .frame(width: 48, alignment: .trailing)
                     }
 
                     Text(windowCornerRadiusDescription)

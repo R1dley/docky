@@ -44,8 +44,15 @@ struct ActionCatalogSettingsView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Button("Reload Catalog") {
-                    catalog.reload()
+                HStack {
+                    Text("Catalog Refresh")
+                        .font(.headline)
+
+                    Spacer()
+
+                    Button("Reload Catalog") {
+                        catalog.reload()
+                    }
                 }
             }
 

@@ -12,15 +12,20 @@ struct BehaviorSettingsView: View {
         Form {
             Section("Placement") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Window Position")
-                        .font(.headline)
+                    HStack {
+                        Text("Window Position")
+                            .font(.headline)
 
-                    Picker("Window Position", selection: $preferences.windowPosition) {
-                        ForEach(DockWindowPosition.allCases) { position in
-                            Text(position.title).tag(position)
+                        Spacer()
+
+                        Picker("Window Position", selection: $preferences.windowPosition) {
+                            ForEach(DockWindowPosition.allCases) { position in
+                                Text(position.title).tag(position)
+                            }
                         }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
                     }
-                    .pickerStyle(.menu)
 
                     Text("Choose where Docky sits on screen, or mirror the macOS Dock position.")
                         .foregroundStyle(.secondary)
@@ -41,15 +46,20 @@ struct BehaviorSettingsView: View {
                 .padding(.vertical, 4)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Overflow Behavior")
-                        .font(.headline)
+                    HStack {
+                        Text("Overflow Behavior")
+                            .font(.headline)
 
-                    Picker("Overflow Behavior", selection: $preferences.overflowBehavior) {
-                        ForEach(DockOverflowBehavior.allCases) { behavior in
-                            Text(behavior.title).tag(behavior)
+                        Spacer()
+
+                        Picker("Overflow Behavior", selection: $preferences.overflowBehavior) {
+                            ForEach(DockOverflowBehavior.allCases) { behavior in
+                                Text(behavior.title).tag(behavior)
+                            }
                         }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
                     }
-                    .pickerStyle(.menu)
 
                     Text("Choose whether Docky shrinks to fit the screen or keeps its size and scrolls when it runs out of room on the current dock axis.")
                         .foregroundStyle(.secondary)
@@ -58,15 +68,20 @@ struct BehaviorSettingsView: View {
                 .padding(.vertical, 4)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Window Axis Size")
-                        .font(.headline)
+                    HStack {
+                        Text("Window Axis Size")
+                            .font(.headline)
 
-                    Picker("Window Axis Size", selection: $preferences.windowAxisSizing) {
-                        ForEach(DockWindowAxisSizing.allCases) { sizing in
-                            Text(sizing.title).tag(sizing)
+                        Spacer()
+
+                        Picker("Window Axis Size", selection: $preferences.windowAxisSizing) {
+                            ForEach(DockWindowAxisSizing.allCases) { sizing in
+                                Text(sizing.title).tag(sizing)
+                            }
                         }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
                     }
-                    .pickerStyle(.menu)
 
                     Text("Choose whether Docky hugs its tiles or stretches across the full screen width or height of the current dock axis.")
                         .foregroundStyle(.secondary)

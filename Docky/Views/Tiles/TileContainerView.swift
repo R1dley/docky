@@ -169,15 +169,24 @@ struct TileContainerView: View {
 
     @ViewBuilder
     private func scrollableSectionView(_ section: TileLayoutSection, axisLength: CGFloat) -> some View {
+        let leadingScrollInset = scrollContentLeadingInset(for: section)
+        let trailingScrollInset = scrollContentTrailingInset(for: section)
+
         ScrollViewReader { scrollProxy in
             ScrollView(scrollAxes, showsIndicators: false) {
                 if position.isVertical {
                     sectionTilesView(section.tiles)
                         .frame(maxWidth: .infinity, alignment: .top)
+                        .padding(.top, leadingScrollInset)
+                        .padding(.bottom, trailingScrollInset)
                 } else {
                     sectionTilesView(section.tiles)
+                        .padding(.leading, leadingScrollInset)
+                        .padding(.trailing, trailingScrollInset)
                 }
             }
+            .padding(position.isVertical ? .bottom : .trailing, -trailingScrollInset)
+            .padding(position.isVertical ? .top : .leading, -leadingScrollInset)
             .frame(
                 width: position.isVertical ? nil : axisLength,
                 height: position.isVertical ? axisLength : nil
@@ -549,6 +558,15 @@ struct TileContainerView: View {
         return components
     }
 
+    private var layoutSections: [TileLayoutSection] {
+        layoutComponents.compactMap { component in
+            if case .section(let section) = component {
+                return section
+            }
+            return nil
+        }
+    }
+
     private func scrollableSectionLayout(in proxy: GeometryProxy) -> ScrollableSectionLayout? {
         guard preferences.overflowBehavior == .scroll else {
             return nil
@@ -652,6 +670,26 @@ struct TileContainerView: View {
 
     private var sectionScrollAnchor: UnitPoint {
         position.isVertical ? .bottom : .trailing
+    }
+
+    private func scrollContentLeadingInset(for section: TileLayoutSection) -> CGFloat {
+        guard layoutSections.first?.id == section.id else {
+            return 0
+        }
+
+        return effectiveEdgePadding
+    }
+
+    private func scrollContentTrailingInset(for section: TileLayoutSection) -> CGFloat {
+        if layoutSections.last?.id == section.id {
+            return effectiveEdgePadding
+        }
+
+        if preferences.showsActivePinnedSeparator, section.id == "primary" {
+            return effectiveTileSize * 0.25
+        }
+
+        return 0
     }
 
     private var effectiveEdgePadding: CGFloat {

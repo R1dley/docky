@@ -10,15 +10,17 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     var onClose: (() -> Void)?
 
     convenience init() {
-        let tabViewController = SettingsTabViewController()
-        let window = NSWindow(contentViewController: tabViewController)
-        window.setContentSize(NSSize(width: 560, height: 420))
+        let rootViewController = NSHostingController(rootView: SettingsRootView())
+        let window = NSWindow(contentViewController: rootViewController)
+        window.setContentSize(NSSize(width: 820, height: 540))
+        window.minSize = NSSize(width: 720, height: 480)
         window.styleMask.insert(.closable)
         window.styleMask.insert(.miniaturizable)
         window.styleMask.insert(.resizable)
         window.title = "Settings"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = false
+        window.toolbarStyle = .preference
         window.center()
         window.isReleasedWhenClosed = false
         self.init(window: window)
@@ -27,48 +29,5 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         onClose?()
-    }
-}
-
-private final class SettingsTabViewController: NSTabViewController {
-    override func viewDidLoad() {
-        super.viewDidLoad()
-
-        tabStyle = .toolbar
-        canPropagateSelectedChildViewControllerTitle = false
-        transitionOptions = []
-
-        addTabViewItem(makeTab(
-            label: "Appearance",
-            imageName: "paintbrush",
-            view: AppearanceSettingsView()
-        ))
-        addTabViewItem(makeTab(
-            label: "Behavior",
-            imageName: "switch.2",
-            view: BehaviorSettingsView()
-        ))
-        addTabViewItem(makeTab(
-            label: "App Icons",
-            imageName: "app.badge",
-            view: AppIconsSettingsView()
-        ))
-        addTabViewItem(makeTab(
-            label: "Permissions",
-            imageName: "lock.shield",
-            view: PermissionsSettingsView()
-        ))
-        addTabViewItem(makeTab(
-            label: "Actions",
-            imageName: "list.bullet.rectangle",
-            view: ActionCatalogSettingsView()
-        ))
-    }
-
-    private func makeTab(label: String, imageName: String, view: some View) -> NSTabViewItem {
-        let item = NSTabViewItem(viewController: NSHostingController(rootView: view))
-        item.label = label
-        item.image = NSImage(systemSymbolName: imageName, accessibilityDescription: label)
-        return item
     }
 }

@@ -29,36 +29,52 @@ struct PermissionsSettingsView: View {
     @ViewBuilder
     private func permissionSection(for permission: Permission) -> some View {
         Section(permission.title) {
-            LabeledContent("Status") {
-                Text(statusText(for: permission))
-                    .foregroundStyle(statusColor(for: permission))
-            }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Status")
+                        .font(.headline)
 
-            if let grantMethod = grantMethodText(for: permission) {
-                LabeledContent("Access Via") {
-                    Text(grantMethod)
-                }
-            }
+                    Spacer()
 
-            Text(permission.explanation)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 12) {
-                Button("Open System Settings") {
-                    service.openSystemSettings(for: permission)
+                    Text(statusText(for: permission))
+                        .foregroundStyle(statusColor(for: permission))
                 }
 
-                if permission == .finderAutomation || permission == .accessibility || permission == .screenCapture || permission == .location {
-                    requestButton(for: permission)
+                if let grantMethod = grantMethodText(for: permission) {
+                    Divider()
+
+                    HStack {
+                        Text("Access Via")
+                            .font(.headline)
+
+                        Spacer()
+
+                        Text(grantMethod)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
-                if permission == .finderAutomation, service.finderAutomation != .notDetermined {
-                    Button("Forget Status") {
-                        service.clearAutomationStatus(for: permission)
+                Text(permission.explanation)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 12) {
+                    Button("Open System Settings") {
+                        service.openSystemSettings(for: permission)
+                    }
+
+                    if permission == .finderAutomation || permission == .accessibility || permission == .screenCapture || permission == .location {
+                        requestButton(for: permission)
+                    }
+
+                    if permission == .finderAutomation, service.finderAutomation != .notDetermined {
+                        Button("Forget Status") {
+                            service.clearAutomationStatus(for: permission)
+                        }
                     }
                 }
             }
+            .padding(.vertical, 4)
         }
     }
 
