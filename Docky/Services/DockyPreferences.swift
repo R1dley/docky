@@ -674,7 +674,9 @@ final class DockyPreferences: ObservableObject {
         didSet {
             let clampedValue = max(0, autohideWindowDelay)
             guard clampedValue != oldValue else {
-                autohideWindowDelay = clampedValue
+                if autohideWindowDelay != clampedValue {
+                    autohideWindowDelay = clampedValue
+                }
                 return
             }
 
@@ -781,7 +783,9 @@ final class DockyPreferences: ObservableObject {
         didSet {
             let clampedValue = max(1, launchpadGridColumnCount)
             guard clampedValue != oldValue else {
-                launchpadGridColumnCount = clampedValue
+                if launchpadGridColumnCount != clampedValue {
+                    launchpadGridColumnCount = clampedValue
+                }
                 return
             }
 
