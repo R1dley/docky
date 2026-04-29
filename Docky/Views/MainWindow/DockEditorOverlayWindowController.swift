@@ -925,6 +925,7 @@ private struct DockEditorItemPreview: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: scale.canvasHeight)
+        .shadow(color: .black.opacity(0.18), radius: 20)
     }
 
     private var size: CGSize {
@@ -940,7 +941,7 @@ private struct DockEditorItemPreview: View {
         case .smartStack:
             let span: CGFloat = 3
             return CGSize(
-                width: scale.tileSize * span + scale.tileSpacing * max(CGFloat(0), span - 1),
+                width: max(scale.tileSize + scale.tileSpacing, scale.tileHeight) * span,
                 height: scale.tileHeight
             )
         case .spacer, .divider:
