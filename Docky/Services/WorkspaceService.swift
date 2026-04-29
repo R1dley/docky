@@ -192,7 +192,7 @@ final class WorkspaceService: ObservableObject {
                 continue
             }
 
-            let bundleWindows = cachedWindowsByBundleIdentifier[runningApp.bundleIdentifier] ?? {
+            var bundleWindows = cachedWindowsByBundleIdentifier[runningApp.bundleIdentifier] ?? {
                 let windows = appWindows(bundleIdentifier: runningApp.bundleIdentifier)
                 cachedWindowsByBundleIdentifier[runningApp.bundleIdentifier] = windows
                 return windows
@@ -206,7 +206,7 @@ final class WorkspaceService: ObservableObject {
                 width: bounds["Width"] ?? 0,
                 height: bounds["Height"] ?? 0
             )
-            guard let matchedWindow = bundleWindows.first(where: {
+            guard let matchedWindowIndex = bundleWindows.firstIndex(where: {
                 if let windowNumber, $0.windowNumber == windowNumber {
                     return true
                 }
@@ -215,10 +215,11 @@ final class WorkspaceService: ObservableObject {
             }) else {
                 continue
             }
+            let matchedWindow = bundleWindows.remove(at: matchedWindowIndex)
+            cachedWindowsByBundleIdentifier[runningApp.bundleIdentifier] = bundleWindows
 
             let visibleWindow = AppWindow(
-                windowIdentifier: windowNumber.map { "\(matchedWindow.bundleIdentifier):\($0)" }
-                    ?? matchedWindow.windowIdentifier,
+                windowIdentifier: matchedWindow.windowIdentifier,
                 windowNumber: windowNumber ?? matchedWindow.windowNumber,
                 bundleIdentifier: matchedWindow.bundleIdentifier,
                 processIdentifier: matchedWindow.processIdentifier,
@@ -763,32 +764,21 @@ final class WorkspaceService: ObservableObject {
         )
     }
 
-    private func minimizedWindowMatches(_ element: AXUIElement, target: MinimizedWindowTile) -> Bool {
-        if let targetWindowNumber = target.windowNumber,
-           intAttribute(axWindowNumberAttribute, of: element) == targetWindowNumber {
-            return true
-        }
-
-        return stringAttribute(kAXTitleAttribute as CFString, of: element) == target.windowTitle
-    }
-
-    private func appWindowMatches(_ element: AXUIElement, target: AppWindow) -> Bool {
-        if let targetWindowNumber = target.windowNumber,
-           intAttribute(axWindowNumberAttribute, of: element) == targetWindowNumber {
-            return true
-        }
-
-        return stringAttribute(kAXTitleAttribute as CFString, of: element) == target.windowTitle
-    }
-
     private func minimizedWindowTarget(for window: MinimizedWindowTile) -> (NSRunningApplication, AXUIElement)? {
         guard let runningApp = NSRunningApplication.runningApplications(withBundleIdentifier: window.bundleIdentifier).first else {
+            return nil
+        }
+        guard let runningAppSnapshot = runningByBundleID[window.bundleIdentifier] else {
             return nil
         }
 
         let applicationElement = AXUIElementCreateApplication(runningApp.processIdentifier)
         guard let windowElement = minimizedWindowElements(applicationElement: applicationElement)
-            .first(where: { minimizedWindowMatches($0, target: window) }) else {
+            .enumerated()
+            .first(where: { index, element in
+                minimizedWindowTile(from: element, runningApp: runningAppSnapshot, fallbackIndex: index)?.windowIdentifier == window.windowIdentifier
+            })?
+            .element else {
             return nil
         }
 
@@ -799,10 +789,17 @@ final class WorkspaceService: ObservableObject {
         guard let runningApp = NSRunningApplication.runningApplications(withBundleIdentifier: window.bundleIdentifier).first else {
             return nil
         }
+        guard let runningAppSnapshot = runningByBundleID[window.bundleIdentifier] else {
+            return nil
+        }
 
         let applicationElement = AXUIElementCreateApplication(runningApp.processIdentifier)
         guard let windowElement = windowElements(applicationElement: applicationElement)
-            .first(where: { appWindowMatches($0, target: window) }) else {
+            .enumerated()
+            .first(where: { index, element in
+                appWindow(from: element, runningApp: runningAppSnapshot, fallbackIndex: index)?.windowIdentifier == window.windowIdentifier
+            })?
+            .element else {
             return nil
         }
 

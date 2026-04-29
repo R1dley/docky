@@ -94,7 +94,7 @@ final class WindowSwitcherOverlayWindowController: NSWindowController {
             guard let self, let window = self.window else { return }
 
             window.ignoresMouseEvents = true
-            self.mainWindow?.makeKey()
+            window.orderOut(nil)
         }
     }
 
@@ -133,6 +133,7 @@ final class WindowSwitcherOverlayWindowController: NSWindowController {
 
         window.alphaValue = 0
         window.ignoresMouseEvents = true
+        window.orderOut(nil)
     }
 
     private func refreshOverlayPresentation() {
