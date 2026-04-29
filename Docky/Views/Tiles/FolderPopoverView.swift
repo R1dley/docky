@@ -574,7 +574,7 @@ private struct FolderPopoverItemView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Image(nsImage: IconCacheService.shared.icon(forFileURL: url))
+            Image(nsImage: IconCacheService.shared.previewIcon(forFileURL: url))
                 .resizable()
                 .interpolation(.high)
                 .aspectRatio(contentMode: .fit)

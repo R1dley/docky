@@ -9,6 +9,7 @@
 //
 
 import AppKit
+import UniformTypeIdentifiers
 
 final class IconCacheService {
     static let shared = IconCacheService()
@@ -37,6 +38,14 @@ final class IconCacheService {
         return image
     }
 
+    func previewIcon(forFileURL url: URL) -> NSImage {
+        if isImageFileURL(url), let image = image(forImageFileURL: url) {
+            return image
+        }
+
+        return icon(forFileURL: url)
+    }
+
     func image(forImageFileURL url: URL) -> NSImage? {
         let key = "image:\(url.path)" as NSString
         if let cached = cache.object(forKey: key) { return cached }
@@ -56,5 +65,22 @@ final class IconCacheService {
             return NSWorkspace.shared.icon(forFile: url.path)
         }
         return NSImage(systemSymbolName: "app.fill", accessibilityDescription: nil) ?? NSImage()
+    }
+
+    private func isImageFileURL(_ url: URL) -> Bool {
+        guard url.isFileURL else {
+            return false
+        }
+
+        let values = try? url.resourceValues(forKeys: [.contentTypeKey, .isDirectoryKey])
+        guard values?.isDirectory != true else {
+            return false
+        }
+
+        if let contentType = values?.contentType {
+            return contentType.conforms(to: .image)
+        }
+
+        return UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true
     }
 }

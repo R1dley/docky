@@ -1783,8 +1783,8 @@ private struct FolderListMenuPresenter: NSViewRepresentable {
         }
 
         private func listMenuIcon(for itemURL: URL) -> NSImage {
-            let icon = IconCacheService.shared.icon(forFileURL: itemURL).copy() as? NSImage
-                ?? IconCacheService.shared.icon(forFileURL: itemURL)
+            let icon = IconCacheService.shared.previewIcon(forFileURL: itemURL).copy() as? NSImage
+                ?? IconCacheService.shared.previewIcon(forFileURL: itemURL)
             icon.size = NSSize(width: 16, height: 16)
             return icon
         }

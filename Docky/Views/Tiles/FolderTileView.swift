@@ -46,7 +46,7 @@ struct FolderTileView: View {
     }
 
     private var folderIcon: some View {
-        Image(nsImage: IconCacheService.shared.icon(forFileURL: tile.url))
+        Image(nsImage: IconCacheService.shared.previewIcon(forFileURL: tile.url))
             .resizable()
             .interpolation(.high)
             .aspectRatio(contentMode: .fit)
@@ -70,7 +70,7 @@ struct FolderTileView: View {
             ForEach(Array(preview.enumerated()).reversed(), id: \.element) { pair in
                 let depth = CGFloat(pair.offset)
 
-                Image(nsImage: IconCacheService.shared.icon(forFileURL: pair.element))
+                Image(nsImage: IconCacheService.shared.previewIcon(forFileURL: pair.element))
                     .resizable()
                     .interpolation(.high)
                     .aspectRatio(contentMode: .fit)
@@ -88,7 +88,7 @@ struct FolderTileView: View {
 
         return ZStack {
             ForEach(Array(offsets.enumerated()), id: \.offset) { index, offset in
-                Image(nsImage: IconCacheService.shared.icon(forFileURL: tile.url))
+                Image(nsImage: IconCacheService.shared.previewIcon(forFileURL: tile.url))
                     .resizable()
                     .interpolation(.high)
                     .aspectRatio(contentMode: .fit)
