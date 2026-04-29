@@ -1759,6 +1759,98 @@ struct TileContainerView: View {
         let height = sizes.map(\.height).max() ?? tileHeight
         return CGSize(width: width, height: height)
     }
+
+    static func previewedTiles(
+        from tiles: [Tile],
+        paletteDrag: DockEditPaletteDrag?,
+        paletteDropDestination: DockEditDropDestination?
+    ) -> [Tile] {
+        guard let paletteDrag,
+              let paletteDropDestination,
+              let previewTile = palettePreviewTile(for: paletteDrag) else {
+            return tiles
+        }
+
+        var previewTiles = tiles
+
+        switch paletteDropDestination.section {
+        case .pinned:
+            let insertionIndex = previewTiles.firstIndex(where: { $0.id == "divider:trailing" }) ?? previewTiles.count
+            previewTiles.insert(previewTile, at: insertionIndex)
+        case .trailing:
+            let insertionIndex = min(
+                max(0, (previewTiles.firstIndex(where: { $0.id == "divider:trailing" }) ?? (previewTiles.count - 1)) + 1),
+                previewTiles.count
+            )
+            previewTiles.insert(previewTile, at: insertionIndex)
+        }
+
+        return previewTiles
+    }
+
+    private static func palettePreviewTile(for paletteDrag: DockEditPaletteDrag) -> Tile? {
+        if let feature = paletteDrag.item.productFeature,
+           !ProductService.shared.availability(for: feature, context: .newPlacement).allowsNewPlacement {
+            return nil
+        }
+
+        switch paletteDrag.item {
+        case .launchpad:
+            return Tile(
+                id: "editor-preview:launchpad",
+                content: .launchpad(LaunchpadTile(identifier: "editor-preview:launchpad"))
+            )
+        case .spacer:
+            return Tile(id: "editor-preview:spacer", content: .spacer)
+        case .divider:
+            return Tile(id: "editor-preview:divider", content: .divider)
+        case .widget(let ownerBundleIdentifier, let kind):
+            return Tile(
+                id: "editor-preview:widget",
+                content: .widget(WidgetTile(
+                    identifier: "editor-preview:widget",
+                    title: kind.title,
+                    kind: kind,
+                    ownerBundleIdentifier: ownerBundleIdentifier,
+                    span: resolvedPaletteWidgetSpan(
+                        ownerBundleIdentifier: ownerBundleIdentifier,
+                        kind: kind,
+                        requestedSpan: paletteDrag.widgetSpan
+                    )
+                ))
+            )
+        case .smartStack:
+            return Tile(
+                id: "editor-preview:smart-stack",
+                content: .smartStack(SmartStackTile(
+                    identifier: "editor-preview:smart-stack",
+                    title: "Smart Stack",
+                    widgets: WidgetCatalog.smartStackRegistrations.map { $0.makeTile() },
+                    span: .three
+                ))
+            )
+        }
+    }
+
+    private static func resolvedPaletteWidgetSpan(
+        ownerBundleIdentifier: String,
+        kind: WidgetKind,
+        requestedSpan: TileSpan?
+    ) -> TileSpan {
+        let supportedSpans = kind.supportedSpans
+        if let requestedSpan, supportedSpans.contains(requestedSpan) {
+            return requestedSpan
+        }
+
+        if let catalogSpan = WidgetCatalog.staticRegistrations.first(where: {
+            $0.ownerBundleIdentifier == ownerBundleIdentifier && $0.kind == kind
+        })?.defaultSpan,
+           supportedSpans.contains(catalogSpan) {
+            return catalogSpan
+        }
+
+        return supportedSpans.last ?? .one
+    }
 }
 
 private struct TileLayoutSection: Identifiable {

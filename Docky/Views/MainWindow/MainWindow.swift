@@ -159,10 +159,12 @@ final class MainWindow: NSWindow {
             preferences.$windowAxisSizing.map { _ in () }.eraseToAnyPublisher(),
             preferences.$windowPosition.map { _ in () }.eraseToAnyPublisher(),
             preferences.$windowDisplayTarget.map { _ in () }.eraseToAnyPublisher(),
+            editMode.$paletteDrag.map { _ in () }.eraseToAnyPublisher(),
+            editMode.$paletteDropDestination.map { _ in () }.eraseToAnyPublisher(),
         ]
         Publishers.MergeMany(layoutSignals)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.applyCurrentFrame(animated: false) }
+            .sink { [weak self] _ in self?.applyCurrentFrame(animated: true, duration: self?.tileMutationAnimationDuration) }
             .store(in: &cancellables)
 
         tileStore.$tiles
@@ -334,8 +336,13 @@ final class MainWindow: NSWindow {
         let position = preferences.windowPosition.resolved(systemOrientation: dockSettings.orientation)
         let baseIconHeight = dockSettings.magnification ? dockSettings.largeSize : dockSettings.tileSize
         let baseTileHeight = baseIconHeight + preferences.tileVerticalPadding * 2
+        let sizingTiles = TileContainerView.previewedTiles(
+            from: tileStore.tiles,
+            paletteDrag: editMode.paletteDrag,
+            paletteDropDestination: editMode.paletteDropDestination
+        )
         let naturalContentSize = TileContainerView.contentSize(
-            tiles: tileStore.tiles,
+            tiles: sizingTiles,
             tileSize: dockSettings.tileSize,
             tileHeight: baseTileHeight,
             tileSpacing: preferences.tileSpacing,
@@ -363,7 +370,7 @@ final class MainWindow: NSWindow {
             position: position
         )
         let baseContentSize = TileContainerView.contentSize(
-            tiles: tileStore.tiles,
+            tiles: sizingTiles,
             tileSize: dockSettings.tileSize,
             tileHeight: baseTileHeight,
             tileSpacing: preferences.tileSpacing,
@@ -383,7 +390,7 @@ final class MainWindow: NSWindow {
         let scaledTileHeight = scaledIconHeight + (preferences.tileVerticalPadding * contentScale * 2)
         let scaledTileSpacing = preferences.tileSpacing * contentScale
         let displayedContentSize = TileContainerView.contentSize(
-            tiles: tileStore.tiles,
+            tiles: sizingTiles,
             tileSize: scaledTileSize,
             tileHeight: scaledTileHeight,
             tileSpacing: scaledTileSpacing,
