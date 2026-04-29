@@ -24,7 +24,7 @@ struct MainWindowView: View {
             chromeBackground(cornerRadius: cornerRadius)
                 .frame(width: chromeFrameSize?.width, height: chromeFrameSize?.height)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .allowsHitTesting(false)
+                .allowsHitTesting(true)
                 .animation(chromeResizeAnimation, value: chromeFrameSize)
 
             TileContainerView()

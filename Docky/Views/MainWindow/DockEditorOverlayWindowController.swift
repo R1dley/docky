@@ -386,17 +386,58 @@ final class DockEditorOverlayWindowController: NSWindowController {
         }
 
         let screenFrame = mainWindow?.screen?.frame ?? NSScreen.main?.frame ?? .zero
-        window.setFrame(screenFrame.integral, display: true)
+        let position = preferences.windowPosition.resolved(systemOrientation: DockSettingsService.shared.orientation)
+        let overlayFrame = insetOverlayFrame(screenFrame: screenFrame, position: position)
 
         if let mainWindow {
-            overlayState.dockFrame = CGRect(
-                x: mainWindow.frame.minX - screenFrame.minX,
-                y: screenFrame.maxY - mainWindow.frame.maxY,
-                width: mainWindow.frame.width,
-                height: mainWindow.frame.height
-            ).integral
+            let visibleDockFrame = mainWindow.frame.intersection(overlayFrame)
+            if visibleDockFrame.isNull || visibleDockFrame.isEmpty {
+                overlayState.dockFrame = .zero
+            } else {
+                overlayState.dockFrame = CGRect(
+                    x: visibleDockFrame.minX - overlayFrame.minX,
+                    y: overlayFrame.maxY - visibleDockFrame.maxY,
+                    width: visibleDockFrame.width,
+                    height: visibleDockFrame.height
+                ).integral
+            }
         } else {
             overlayState.dockFrame = .zero
+        }
+
+        window.setFrame(overlayFrame.integral, display: true)
+    }
+
+    private func insetOverlayFrame(screenFrame: CGRect, position: ResolvedDockWindowPosition) -> CGRect {
+        guard let mainWindow else {
+            return screenFrame
+        }
+
+        var frame = screenFrame
+        let insetAmount = max(0, dockExtent(for: mainWindow.frame, position: position))
+
+        switch position {
+        case .bottom:
+            frame.origin.y += insetAmount
+            frame.size.height -= insetAmount
+        case .top:
+            frame.size.height -= insetAmount
+        case .left:
+            frame.origin.x += insetAmount
+            frame.size.width -= insetAmount
+        case .right:
+            frame.size.width -= insetAmount
+        }
+
+        return frame
+    }
+
+    private func dockExtent(for frame: CGRect, position: ResolvedDockWindowPosition) -> CGFloat {
+        switch position {
+        case .bottom, .top:
+            frame.height
+        case .left, .right:
+            frame.width
         }
     }
 }
@@ -454,8 +495,6 @@ private final class DockEditorOverlayWindow: NSWindow {
 }
 
 private struct DockEditorOverlayView: View {
-    private let paletteDockGap: CGFloat = 28
-
     @ObservedObject var state: DockEditorOverlayState
     @ObservedObject private var editMode = DockEditModeService.shared
     @ObservedObject private var dockSettings = DockSettingsService.shared
@@ -472,7 +511,7 @@ private struct DockEditorOverlayView: View {
                     }
 
                 layout(in: proxy.size)
-                    .padding(28)
+                    .offset(y: position == .bottom ? -28 : 0)
             }
             .ignoresSafeArea()
         }
@@ -523,9 +562,9 @@ private struct DockEditorOverlayView: View {
     private var paletteInset: CGFloat {
         switch position {
         case .bottom, .top:
-            state.dockFrame.height - paletteDockGap
+            max(0, state.dockFrame.height)
         case .left, .right:
-            state.dockFrame.width - paletteDockGap
+            max(0, state.dockFrame.width)
         }
     }
 
@@ -655,10 +694,12 @@ private struct DockEditorBrowserView: View {
             )
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+            ConcentricRectangle(
+                uniformTopCorners: .fixed(position == .top || position == .left ? 0 : 30),
+                uniformBottomCorners: .fixed(position == .bottom || position == .right ? 0 : 30)
+            )
+            .stroke(.primary.opacity(0.14), lineWidth: 1)
         }
-        .shadow(color: .black.opacity(0.18), radius: 30, y: 16)
     }
 
     private var header: some View {
@@ -923,12 +964,12 @@ private struct DockEditorUtilityPreview: View {
 
             switch kind {
             case .spacer:
-                Capsule(style: .continuous)
-                    .stroke(.white.opacity(0.32), style: StrokeStyle(lineWidth: 2, dash: [5, 6]))
-                    .frame(width: scale == .card ? 34 : 48, height: 10)
+                RoundedRectangle(cornerRadius: scale.tileHeight * 0.24, style: .continuous)
+                    .stroke(.primary.opacity(0.32), style: StrokeStyle(lineWidth: 2, dash: [5, 6]))
+                    .frame(width: scale.tileHeight * 0.78, height: scale.tileHeight * 0.78)
             case .divider:
                 Rectangle()
-                    .fill(.white.opacity(0.28))
+                    .fill(.primary.opacity(0.28))
                     .frame(width: 1, height: scale.tileHeight * 0.72)
             }
 
@@ -939,11 +980,11 @@ private struct DockEditorUtilityPreview: View {
 
     private var tileBlock: some View {
         RoundedRectangle(cornerRadius: scale.tileHeight * 0.24, style: .continuous)
-            .fill(.white.opacity(0.14))
+            .fill(.primary.opacity(0.14))
             .frame(width: scale.tileHeight * 0.78, height: scale.tileHeight * 0.78)
             .overlay {
                 RoundedRectangle(cornerRadius: scale.tileHeight * 0.24, style: .continuous)
-                    .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(.primary.opacity(0.08), lineWidth: 1)
             }
     }
 }

@@ -342,40 +342,32 @@ struct TileView: View {
     }
 
     var body: some View {
-        laidOutContent
-            .opacity(isLockedProductPlacement ? 0.38 : 1)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .overlay(alignment: runningIndicatorAlignment) {
-                runningIndicator
-                    .padding(runningIndicatorEdge, runningIndicatorInset)
-                    .offset(y: -max((layout.scaled(preferences.tileVerticalPadding) / 2), 2))
-            }
-            .overlay {
-                if isLockedProductPlacement {
-                    LockedProductTileOverlay()
-                        .allowsHitTesting(false)
+        appDocumentDropTarget(
+            laidOutContent
+                .opacity(isLockedProductPlacement ? 0.38 : 1)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .overlay(alignment: runningIndicatorAlignment) {
+                    runningIndicator
+                        .padding(runningIndicatorEdge, runningIndicatorInset)
+                        .offset(y: -max((layout.scaled(preferences.tileVerticalPadding) / 2), 2))
                 }
-            }
-            .overlay {
-                if isFileDropTargeted {
-                    laidOutContent
-                        .disabled(true)
-                        .colorMultiply(.black.opacity(0.25))
+                .overlay {
+                    if isLockedProductPlacement {
+                        LockedProductTileOverlay()
+                            .allowsHitTesting(false)
+                    }
                 }
-            }
-            .contentShape(Rectangle())
-            .onHover(perform: updateHoverState)
-            .onTapGesture(perform: handleTap)
-            .onDrop(of: [UTType.fileURL], delegate: AppDocumentDropDelegate(
-                canHandleDrop: canHandleAppDocumentDrop(providers:),
-                logEvent: { message in
-                    Self.logger.debug(
-                        "App tile drop delegate tile=\(tile.id, privacy: .public) message=\(message, privacy: .public)"
-                    )
-                },
-                updateIsTargeted: { isFileDropTargeted = $0 },
-                performDrop: handleAppDocumentDrop(providers:)
-            ))
+                .overlay {
+                    if isFileDropTargeted {
+                        laidOutContent
+                            .disabled(true)
+                            .colorMultiply(.black.opacity(0.25))
+                    }
+                }
+                .contentShape(Rectangle())
+                .onHover(perform: updateHoverState)
+                .onTapGesture(perform: handleTap)
+        )
             .onDisappear {
                 isHovering = false
                 isTooltipPresented = false
@@ -463,6 +455,24 @@ struct TileView: View {
                     }
                 }
             }
+    }
+
+    @ViewBuilder
+    private func appDocumentDropTarget<Content: View>(_ content: Content) -> some View {
+        if appDocumentDropBundleIdentifier != nil {
+            content.onDrop(of: [UTType.fileURL], delegate: AppDocumentDropDelegate(
+                canHandleDrop: canHandleAppDocumentDrop(providers:),
+                logEvent: { message in
+                    Self.logger.debug(
+                        "App tile drop delegate tile=\(tile.id, privacy: .public) message=\(message, privacy: .public)"
+                    )
+                },
+                updateIsTargeted: { isFileDropTargeted = $0 },
+                performDrop: handleAppDocumentDrop(providers:)
+            ))
+        } else {
+            content
+        }
     }
 
     @ViewBuilder
