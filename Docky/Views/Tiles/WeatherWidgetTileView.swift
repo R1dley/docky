@@ -12,12 +12,14 @@ struct WeatherWidgetTileView: View {
     let cornerRadius: CGFloat
     let renderedSpan: TileSpan
     let isWithinStack: Bool
+    var isExpanded: Bool = false
 
     @ObservedObject private var weather = WeatherService.shared
 
     var body: some View {
         GeometryReader { proxy in
             let layout = layout(in: proxy.size)
+            let expandedLayout = expandedLayout(in: proxy.size)
 
             ZStack {
                 LinearGradient(
@@ -33,7 +35,21 @@ struct WeatherWidgetTileView: View {
                 }
 
                 content(layout: layout)
+                    .opacity(isExpanded ? 0 : 1)
+                    .animation(.easeOut(duration: 0.12), value: isExpanded)
+
+                if isExpanded {
+                    expandedContent(layout: expandedLayout)
+                        .transition(
+                            .opacity.animation(
+                                .easeInOut(duration: 0.22).delay(
+                                    0.22
+                                )
+                            ).combined(with: .scale).combined(with: .slide)
+                        )
+                }
             }
+            .animation(.easeInOut(duration: 0.22), value: isExpanded)
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .task {
@@ -55,6 +71,141 @@ struct WeatherWidgetTileView: View {
         } else {
             placeholder(layout: layout)
         }
+    }
+
+    @ViewBuilder
+    private func expandedContent(layout: ExpandedLayoutMetrics) -> some View {
+        if let snapshot = weather.snapshot {
+            expandedView(snapshot: snapshot, layout: layout)
+        } else {
+            expandedPlaceholder(layout: layout)
+        }
+    }
+
+    private func expandedView(snapshot: WeatherSnapshot, layout: ExpandedLayoutMetrics) -> some View {
+        VStack(alignment: .leading, spacing: layout.sectionSpacing) {
+            HStack(alignment: .top, spacing: layout.contentGap) {
+                VStack(alignment: .leading, spacing: layout.stackSpacing) {
+                    Text(snapshot.locationName)
+                        .font(.system(size: layout.locationFontSize, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    Text(snapshot.roundedTemperatureText)
+                        .font(.system(size: layout.temperatureFontSize, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: snapshot.symbolName)
+                    .font(.system(size: layout.symbolSize, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.96))
+                    .symbolRenderingMode(.hierarchical)
+            }
+
+            Text(conditionLine(for: snapshot))
+                .font(.system(size: layout.secondaryFontSize, weight: .medium))
+                .foregroundStyle(.white.opacity(0.82))
+                .lineLimit(2)
+
+            Spacer(minLength: 0)
+
+            forecastRow(for: snapshot.forecast, layout: layout)
+        }
+        .padding(layout.contentPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func conditionLine(for snapshot: WeatherSnapshot) -> String {
+        var parts: [String] = [snapshot.conditionDescription]
+
+        if let high = snapshot.highTemperature {
+            parts.append("H: \(Int(high.rounded()))°")
+        }
+        if let low = snapshot.lowTemperature {
+            parts.append("L: \(Int(low.rounded()))°")
+        }
+
+        return parts.joined(separator: " • ")
+    }
+
+    @ViewBuilder
+    private func forecastRow(for forecast: [WeatherForecastDay], layout: ExpandedLayoutMetrics) -> some View {
+        if !forecast.isEmpty {
+            HStack(spacing: layout.forecastSpacing) {
+                ForEach(forecast.prefix(5)) { day in
+                    forecastColumn(day: day, layout: layout)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func forecastColumn(day: WeatherForecastDay, layout: ExpandedLayoutMetrics) -> some View {
+        VStack(spacing: layout.forecastStackSpacing) {
+            Text(day.weekdayShortText)
+                .font(.system(size: layout.forecastDayFontSize, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.78))
+                .textCase(.uppercase)
+                .lineLimit(1)
+
+            Image(systemName: day.symbolName)
+                .font(.system(size: layout.forecastSymbolSize, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.94))
+                .symbolRenderingMode(.hierarchical)
+                .frame(maxHeight: .infinity)
+
+            VStack(spacing: 1) {
+                if let high = day.highTemperature {
+                    Text("\(Int(high.rounded()))°")
+                        .font(.system(size: layout.forecastTempFontSize, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.96))
+                }
+                if let low = day.lowTemperature {
+                    Text("\(Int(low.rounded()))°")
+                        .font(.system(size: layout.forecastTempFontSize, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.66))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, layout.metricPadding)
+        .padding(.horizontal, layout.metricPadding * 0.6)
+        .background(
+            RoundedRectangle(cornerRadius: layout.metricCornerRadius, style: .continuous)
+                .fill(Color.white.opacity(0.12))
+        )
+    }
+
+    private func expandedPlaceholder(layout: ExpandedLayoutMetrics) -> some View {
+        VStack(spacing: layout.stackSpacing) {
+            if weather.isLoading {
+                ProgressView()
+                    .controlSize(.large)
+                    .tint(.white.opacity(0.92))
+            } else {
+                Image(systemName: placeholderSymbolName)
+                    .font(.system(size: layout.symbolSize, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+            }
+
+            Text(placeholderTitle)
+                .font(.system(size: layout.locationFontSize, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.94))
+                .multilineTextAlignment(.center)
+
+            if let lastErrorDescription = weather.lastErrorDescription {
+                Text(lastErrorDescription)
+                    .font(.system(size: layout.secondaryFontSize))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+            }
+        }
+        .padding(layout.contentPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func oneUp(snapshot: WeatherSnapshot, layout: LayoutMetrics) -> some View {
@@ -158,6 +309,36 @@ struct WeatherWidgetTileView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private func expandedLayout(in size: CGSize) -> ExpandedLayoutMetrics {
+        let width = max(size.width, 1)
+        let height = max(size.height, 1)
+        let minSide = min(width, height)
+        let contentPadding = min(max(minSide * 0.08, 12), 22)
+        let contentGap = min(max(minSide * 0.06, 10), 22)
+        let stackSpacing = min(max(minSide * 0.025, 4), 10)
+        let sectionSpacing = min(max(minSide * 0.05, 8), 8)
+
+        return ExpandedLayoutMetrics(
+            contentPadding: contentPadding,
+            contentGap: contentGap,
+            stackSpacing: stackSpacing,
+            sectionSpacing: sectionSpacing,
+            symbolSize: min(max(minSide * 0.26, 36), 96),
+            temperatureFontSize: min(max(minSide * 0.22, 36), 78),
+            locationFontSize: min(max(minSide * 0.07, 14), 22),
+            secondaryFontSize: min(max(minSide * 0.05, 11), 16),
+            metricLabelFontSize: min(max(minSide * 0.035, 9), 12),
+            metricValueFontSize: min(max(minSide * 0.06, 14), 22),
+            metricPadding: min(max(minSide * 0.022, 6), 10),
+            metricCornerRadius: min(max(minSide * 0.04, 8), 14),
+            forecastSpacing: min(max(minSide * 0.015, 4), 8),
+            forecastStackSpacing: min(max(minSide * 0.012, 2), 6),
+            forecastDayFontSize: min(max(minSide * 0.04, 9), 13),
+            forecastSymbolSize: min(max(minSide * 0.07, 16), 26),
+            forecastTempFontSize: min(max(minSide * 0.045, 10), 14)
+        )
+    }
+
     private func layout(in size: CGSize) -> LayoutMetrics {
         let width = max(size.width, 1)
         let height = max(size.height, 1)
@@ -223,4 +404,24 @@ private struct LayoutMetrics {
     let temperatureFontSize: CGFloat
     let secondaryFontSize: CGFloat
     let leadingColumnWidth: CGFloat
+}
+
+private struct ExpandedLayoutMetrics {
+    let contentPadding: CGFloat
+    let contentGap: CGFloat
+    let stackSpacing: CGFloat
+    let sectionSpacing: CGFloat
+    let symbolSize: CGFloat
+    let temperatureFontSize: CGFloat
+    let locationFontSize: CGFloat
+    let secondaryFontSize: CGFloat
+    let metricLabelFontSize: CGFloat
+    let metricValueFontSize: CGFloat
+    let metricPadding: CGFloat
+    let metricCornerRadius: CGFloat
+    let forecastSpacing: CGFloat
+    let forecastStackSpacing: CGFloat
+    let forecastDayFontSize: CGFloat
+    let forecastSymbolSize: CGFloat
+    let forecastTempFontSize: CGFloat
 }

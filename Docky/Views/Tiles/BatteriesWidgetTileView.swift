@@ -11,6 +11,7 @@ struct BatteriesWidgetTileView: View {
     let cornerRadius: CGFloat
     let renderedSpan: TileSpan
     let isWithinStack: Bool
+    var isExpanded: Bool = false
 
     @ObservedObject private var batteries = BatteriesService.shared
 

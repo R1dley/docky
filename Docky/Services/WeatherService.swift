@@ -20,6 +20,7 @@ final class WeatherService: NSObject, ObservableObject {
 
     private let locationManager = CLLocationManager()
     private var lastRefreshDate: Date?
+    private var lastWeatherUnits: WeatherUnits?
     private var pendingRefreshTask: Task<Void, Never>?
     private var isAwaitingLocation = false
     private var authorizationRequestContinuation: CheckedContinuation<Bool, Never>?
@@ -29,6 +30,12 @@ final class WeatherService: NSObject, ObservableObject {
         super.init()
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(localeDidChange),
+            name: NSLocale.currentLocaleDidChangeNotification,
+            object: nil
+        )
     }
 
     func ensureFreshWeather() {
@@ -70,10 +77,13 @@ final class WeatherService: NSObject, ObservableObject {
             return
         }
 
+        let weatherUnits = WeatherUnits.current
+
         if !force,
            let lastRefreshDate,
            Date().timeIntervalSince(lastRefreshDate) < 900,
-           snapshot != nil {
+           snapshot != nil,
+           lastWeatherUnits == weatherUnits {
             return
         }
 
@@ -128,10 +138,12 @@ final class WeatherService: NSObject, ObservableObject {
             guard let self else { return }
 
             do {
-                let snapshot = try await self.fetchSnapshot(for: location)
+                let units = WeatherUnits.current
+                let snapshot = try await self.fetchSnapshot(for: location, units: units)
                 guard !Task.isCancelled else { return }
                 self.snapshot = snapshot
                 self.lastRefreshDate = Date()
+                self.lastWeatherUnits = units
                 self.lastErrorDescription = nil
             } catch is CancellationError {
                 return
@@ -144,7 +156,7 @@ final class WeatherService: NSObject, ObservableObject {
         }
     }
 
-    private func fetchSnapshot(for location: CLLocation) async throws -> WeatherSnapshot {
+    private func fetchSnapshot(for location: CLLocation, units: WeatherUnits) async throws -> WeatherSnapshot {
         let coordinate = location.coordinate
 
         var components = URLComponents(string: "https://api.open-meteo.com/v1/forecast")
@@ -152,12 +164,12 @@ final class WeatherService: NSObject, ObservableObject {
             URLQueryItem(name: "latitude", value: String(coordinate.latitude)),
             URLQueryItem(name: "longitude", value: String(coordinate.longitude)),
             URLQueryItem(name: "current", value: "temperature_2m,weather_code,is_day"),
-            URLQueryItem(name: "daily", value: "temperature_2m_max,temperature_2m_min"),
-            URLQueryItem(name: "temperature_unit", value: "fahrenheit"),
-            URLQueryItem(name: "wind_speed_unit", value: "mph"),
-            URLQueryItem(name: "precipitation_unit", value: "inch"),
+            URLQueryItem(name: "daily", value: "temperature_2m_max,temperature_2m_min,weather_code"),
+            URLQueryItem(name: "temperature_unit", value: units.temperatureQueryValue),
+            URLQueryItem(name: "wind_speed_unit", value: units.windSpeedQueryValue),
+            URLQueryItem(name: "precipitation_unit", value: units.precipitationQueryValue),
             URLQueryItem(name: "timezone", value: "auto"),
-            URLQueryItem(name: "forecast_days", value: "1")
+            URLQueryItem(name: "forecast_days", value: "6")
         ]
 
         guard let url = components?.url else {
@@ -168,6 +180,7 @@ final class WeatherService: NSObject, ObservableObject {
         let response = try JSONDecoder().decode(OpenMeteoResponse.self, from: data)
         let current = response.current
         let locationName = await reverseGeocodeLocationName(for: location)
+        let forecast = Self.makeForecastDays(from: response.daily)
 
         return WeatherSnapshot(
             locationName: locationName,
@@ -175,8 +188,48 @@ final class WeatherService: NSObject, ObservableObject {
             highTemperature: response.daily.temperature2mMax.first,
             lowTemperature: response.daily.temperature2mMin.first,
             symbolName: WeatherCondition.symbolName(for: current.weatherCode, isDaylight: current.isDay == 1),
-            conditionDescription: WeatherCondition.description(for: current.weatherCode)
+            conditionDescription: WeatherCondition.description(for: current.weatherCode),
+            forecast: forecast
         )
+    }
+
+    private static func makeForecastDays(from daily: OpenMeteoResponse.DailyWeather) -> [WeatherForecastDay] {
+        let isoFormatter = DateFormatter()
+        isoFormatter.dateFormat = "yyyy-MM-dd"
+        isoFormatter.locale = Locale(identifier: "en_US_POSIX")
+        isoFormatter.timeZone = .autoupdatingCurrent
+
+        let count = min(daily.time.count, daily.temperature2mMax.count, daily.temperature2mMin.count, daily.weatherCode.count)
+        let calendar = Calendar.autoupdatingCurrent
+        let today = calendar.startOfDay(for: Date())
+
+        var days: [WeatherForecastDay] = []
+        days.reserveCapacity(count)
+
+        for index in 0..<count {
+            guard let parsed = isoFormatter.date(from: daily.time[index]) else { continue }
+            let normalized = calendar.startOfDay(for: parsed)
+            guard normalized > today else { continue }
+            days.append(
+                WeatherForecastDay(
+                    date: normalized,
+                    symbolName: WeatherCondition.symbolName(for: daily.weatherCode[index], isDaylight: true),
+                    highTemperature: daily.temperature2mMax[index],
+                    lowTemperature: daily.temperature2mMin[index]
+                )
+            )
+        }
+
+        return days
+    }
+
+    @objc private func localeDidChange() {
+        guard lastWeatherUnits != WeatherUnits.current else {
+            return
+        }
+
+        lastRefreshDate = nil
+        refresh(force: true)
     }
 
     private func reverseGeocodeLocationName(for location: CLLocation) async -> String {
@@ -203,15 +256,33 @@ final class WeatherService: NSObject, ObservableObject {
         pendingRefreshTask?.cancel()
         pendingRefreshTask = nil
 
+        let calendar = Calendar.autoupdatingCurrent
+        let today = calendar.startOfDay(for: Date())
+        let isUS = WeatherUnits.current == .us
+        let dummyForecast: [WeatherForecastDay] = (1...5).compactMap { offset in
+            guard let date = calendar.date(byAdding: .day, value: offset, to: today) else { return nil }
+            let symbols = ["sun.max.fill", "cloud.sun.fill", "cloud.fill", "cloud.rain.fill", "cloud.bolt.rain.fill"]
+            let highs: [Double] = isUS ? [74, 71, 68, 65, 70] : [23, 21, 19, 17, 21]
+            let lows: [Double] = isUS ? [58, 55, 52, 50, 56] : [14, 13, 11, 10, 13]
+            return WeatherForecastDay(
+                date: date,
+                symbolName: symbols[offset - 1],
+                highTemperature: highs[offset - 1],
+                lowTemperature: lows[offset - 1]
+            )
+        }
+
         snapshot = WeatherSnapshot(
             locationName: "San Francisco",
-            temperature: 68,
-            highTemperature: 72,
-            lowTemperature: 58,
+            temperature: isUS ? 68 : 20,
+            highTemperature: isUS ? 72 : 22,
+            lowTemperature: isUS ? 58 : 14,
             symbolName: "sun.max.fill",
-            conditionDescription: "Clear"
+            conditionDescription: "Clear",
+            forecast: dummyForecast
         )
         lastRefreshDate = Date()
+        lastWeatherUnits = WeatherUnits.current
         isLoading = false
         isAwaitingLocation = false
         lastErrorDescription = nil
@@ -311,6 +382,25 @@ struct WeatherSnapshot: Equatable {
     let lowTemperature: Double?
     let symbolName: String
     let conditionDescription: String
+    let forecast: [WeatherForecastDay]
+
+    init(
+        locationName: String,
+        temperature: Double,
+        highTemperature: Double?,
+        lowTemperature: Double?,
+        symbolName: String,
+        conditionDescription: String,
+        forecast: [WeatherForecastDay] = []
+    ) {
+        self.locationName = locationName
+        self.temperature = temperature
+        self.highTemperature = highTemperature
+        self.lowTemperature = lowTemperature
+        self.symbolName = symbolName
+        self.conditionDescription = conditionDescription
+        self.forecast = forecast
+    }
 
     var roundedTemperatureText: String {
         "\(Int(temperature.rounded()))°"
@@ -333,8 +423,68 @@ struct WeatherSnapshot: Equatable {
     }
 }
 
+struct WeatherForecastDay: Equatable, Identifiable {
+    let date: Date
+    let symbolName: String
+    let highTemperature: Double?
+    let lowTemperature: Double?
+
+    var id: TimeInterval { date.timeIntervalSinceReferenceDate }
+
+    var weekdayShortText: String {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.setLocalizedDateFormatFromTemplate("EEE")
+        return formatter.string(from: date)
+    }
+}
+
 private enum WeatherError: Error {
     case invalidRequest
+}
+
+private enum WeatherUnits: Equatable {
+    case metric
+    case uk
+    case us
+
+    static var current: WeatherUnits {
+        switch Locale.autoupdatingCurrent.measurementSystem {
+        case .us:
+            .us
+        case .uk:
+            .uk
+        default:
+            .metric
+        }
+    }
+
+    var temperatureQueryValue: String {
+        switch self {
+        case .us:
+            "fahrenheit"
+        case .metric, .uk:
+            "celsius"
+        }
+    }
+
+    var windSpeedQueryValue: String {
+        switch self {
+        case .us, .uk:
+            "mph"
+        case .metric:
+            "kmh"
+        }
+    }
+
+    var precipitationQueryValue: String {
+        switch self {
+        case .us:
+            "inch"
+        case .metric, .uk:
+            "mm"
+        }
+    }
 }
 
 private enum WeatherCondition {
@@ -404,12 +554,16 @@ private struct OpenMeteoResponse: Decodable {
     }
 
     struct DailyWeather: Decodable {
+        let time: [String]
         let temperature2mMax: [Double]
         let temperature2mMin: [Double]
+        let weatherCode: [Int]
 
         private enum CodingKeys: String, CodingKey {
+            case time
             case temperature2mMax = "temperature_2m_max"
             case temperature2mMin = "temperature_2m_min"
+            case weatherCode = "weather_code"
         }
     }
 }

@@ -10,6 +10,7 @@ struct WidgetTileView: View {
     let cornerRadius: CGFloat
     let renderedSpan: TileSpan
     let isWithinStack: Bool
+    var isExpanded: Bool = false
 
     var body: some View {
         switch tile.kind {
@@ -18,42 +19,48 @@ struct WidgetTileView: View {
                 tile: tile,
                 cornerRadius: cornerRadius,
                 renderedSpan: renderedSpan,
-                isWithinStack: isWithinStack
+                isWithinStack: isWithinStack,
+                isExpanded: isExpanded
             )
         case .reminders:
             RemindersWidgetTileView(
                 tile: tile,
                 cornerRadius: cornerRadius,
                 renderedSpan: renderedSpan,
-                isWithinStack: isWithinStack
+                isWithinStack: isWithinStack,
+                isExpanded: isExpanded
             )
         case .batteries:
             BatteriesWidgetTileView(
                 tile: tile,
                 cornerRadius: cornerRadius,
                 renderedSpan: renderedSpan,
-                isWithinStack: isWithinStack
+                isWithinStack: isWithinStack,
+                isExpanded: isExpanded
             )
         case .systemStatus:
             SystemStatusWidgetTileView(
                 tile: tile,
                 cornerRadius: cornerRadius,
                 renderedSpan: renderedSpan,
-                isWithinStack: isWithinStack
+                isWithinStack: isWithinStack,
+                isExpanded: isExpanded
             )
         case .nowPlaying:
             NowPlayingWidgetTileView(
                 tile: tile,
                 cornerRadius: cornerRadius,
                 renderedSpan: renderedSpan,
-                isWithinStack: isWithinStack
+                isWithinStack: isWithinStack,
+                isExpanded: isExpanded
             )
         case .weather:
             WeatherWidgetTileView(
                 tile: tile,
                 cornerRadius: cornerRadius,
                 renderedSpan: renderedSpan,
-                isWithinStack: isWithinStack
+                isWithinStack: isWithinStack,
+                isExpanded: isExpanded
             )
         }
     }
