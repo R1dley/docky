@@ -21,19 +21,21 @@ struct ProductSettingsView: View {
 
                         Spacer()
 
-                        Text(product.currentTier.title)
-                            .foregroundStyle(.secondary)
+                        
+
+                        if product.currentTier == .pro {
+                            ProBadge()
+                        } else {
+                            Text(product.currentTier.title)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     HStack(alignment: .top) {
                         Text(product.registrationStatus.title)
                             .font(.headline)
-
+                        
                         Spacer()
-
-                        if product.currentTier == .pro {
-                            ProBadge()
-                        }
                     }
 
                     Text(product.registrationStatus.message)

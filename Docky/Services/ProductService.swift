@@ -183,7 +183,7 @@ enum ProductRegistrationStatus: Equatable {
         case .verifying:
             "Verifying Registration"
         case .verified(let tier):
-            "Registered: \(tier.title)"
+            "Registered"
         case .verificationFailed:
             "Unable to Verify"
         }
@@ -215,7 +215,7 @@ enum ProductRegistrationStatus: Equatable {
     }
 }
 
-private struct TrialStartResponse: Decodable {
+private struct TrialEntitlementResponse {
     let status: String
     let email: String
     let startedAt: String
@@ -225,6 +225,7 @@ private struct TrialStartResponse: Decodable {
 private enum TrialStartError: LocalizedError {
     case invalidEmail
     case invalidResponse
+    case notFound
     case transport
     case server(String)
 
@@ -234,6 +235,8 @@ private enum TrialStartError: LocalizedError {
             "Enter a valid email address to start your trial."
         case .invalidResponse:
             "Docky received an invalid trial response."
+        case .notFound:
+            "This Docky trial could not be found."
         case .transport:
             "Couldn't reach Docky's trial server."
         case .server(let message):
@@ -275,6 +278,7 @@ final class ProductService: ObservableObject {
     nonisolated static let maximumFreeFolderCount = 3
     private nonisolated static let gumroadVerifyURL = URL(string: "https://api.gumroad.com/v2/licenses/verify")!
     private nonisolated static let trialStartURL = URL(string: "https://getdocky.com/api/trial")!
+    private nonisolated static let trialRefreshIntervalNanoseconds: UInt64 = 6 * 60 * 60 * 1_000_000_000
     static let shared = ProductService()
 
     @Published private(set) var currentTier: ProductTier {
@@ -292,6 +296,7 @@ final class ProductService: ObservableObject {
     private let defaults: UserDefaults
     private var verificationTask: Task<Void, Never>?
     private var trialTask: Task<Void, Never>?
+    private var trialRefreshTask: Task<Void, Never>?
 
     var isVerifyingRegistration: Bool {
         if case .verifying = registrationStatus {
@@ -329,12 +334,17 @@ final class ProductService: ObservableObject {
         defaults.removeObject(forKey: Keys.legacyRegisteredEmail)
         refreshRegistrationStatus()
 
-        guard hasStoredLicenseKey else {
-            return
+        if hasStoredLicenseKey {
+            verificationTask = Task { [weak self] in
+                await self?.revalidateStoredRegistration()
+            }
         }
 
-        verificationTask = Task { [weak self] in
-            await self?.revalidateStoredRegistration()
+        if Self.readTrialIdentity() != nil {
+            trialRefreshTask = Task { [weak self] in
+                await self?.revalidateTrialEntitlement()
+                await self?.runTrialRefreshLoop()
+            }
         }
     }
 
@@ -397,6 +407,7 @@ final class ProductService: ObservableObject {
     func clearRegistration() {
         verificationTask?.cancel()
         trialTask?.cancel()
+        trialRefreshTask?.cancel()
         currentTier = .free
         Self.deleteLicenseKey()
         hasStoredLicenseKey = false
@@ -455,20 +466,75 @@ final class ProductService: ObservableObject {
         do {
             let identity = Self.readTrialIdentity() ?? Self.createTrialIdentity()
             let response = try await Self.startTrial(email: email, identity: identity)
-            guard let expiresAt = Self.parseISO8601Date(response.expiresAt) else {
-                throw TrialStartError.invalidResponse
-            }
-
-            trialEmail = response.email
-            trialExpiresAt = expiresAt
-            defaults.set(response.email, forKey: Keys.trialEmail)
-            defaults.set(expiresAt, forKey: Keys.trialExpiresAt)
-            currentTier = expiresAt > Date() ? .pro : .free
-            refreshRegistrationStatus()
+            applyTrialEntitlement(response)
+            startTrialRefreshLoopIfNeeded()
         } catch let error as TrialStartError {
             registrationStatus = .verificationFailed(error.localizedDescription)
         } catch {
             registrationStatus = .verificationFailed("Couldn't start your trial right now.")
+        }
+    }
+
+    private func revalidateTrialEntitlement() async {
+        guard let identity = Self.readTrialIdentity() else {
+            return
+        }
+
+        do {
+            let response = try await Self.fetchTrialEntitlement(identity: identity)
+            applyTrialEntitlement(response)
+        } catch let error as TrialStartError {
+            switch error {
+            case .notFound:
+                clearTrial()
+                if !hasStoredLicenseKey {
+                    currentTier = .free
+                }
+                refreshRegistrationStatus()
+            case .transport:
+                refreshRegistrationStatus()
+            case .invalidEmail, .invalidResponse, .server:
+                registrationStatus = .verificationFailed(error.localizedDescription)
+            }
+        } catch {
+            refreshRegistrationStatus()
+        }
+    }
+
+    private func applyTrialEntitlement(_ response: TrialEntitlementResponse) {
+        guard let expiresAt = Self.parseISO8601Date(response.expiresAt) else {
+            registrationStatus = .verificationFailed(TrialStartError.invalidResponse.localizedDescription)
+            return
+        }
+
+        trialEmail = response.email
+        trialExpiresAt = expiresAt
+        defaults.set(response.email, forKey: Keys.trialEmail)
+        defaults.set(expiresAt, forKey: Keys.trialExpiresAt)
+        currentTier = response.status == "active" && expiresAt > Date() ? .pro : .free
+        refreshRegistrationStatus()
+    }
+
+    private func startTrialRefreshLoopIfNeeded() {
+        guard Self.readTrialIdentity() != nil else {
+            return
+        }
+
+        trialRefreshTask?.cancel()
+        trialRefreshTask = Task { [weak self] in
+            await self?.runTrialRefreshLoop()
+        }
+    }
+
+    private func runTrialRefreshLoop() async {
+        while !Task.isCancelled {
+            do {
+                try await Task.sleep(nanoseconds: Self.trialRefreshIntervalNanoseconds)
+            } catch {
+                return
+            }
+
+            await revalidateTrialEntitlement()
         }
     }
 
@@ -621,7 +687,7 @@ final class ProductService: ObservableObject {
     private nonisolated static func startTrial(
         email: String,
         identity: String
-    ) async throws -> TrialStartResponse {
+    ) async throws -> TrialEntitlementResponse {
         var request = URLRequest(url: trialStartURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -643,7 +709,7 @@ final class ProductService: ObservableObject {
         }
 
         if httpResponse.statusCode == 200 {
-            return try JSONDecoder().decode(TrialStartResponse.self, from: data)
+            return try parseTrialEntitlementResponse(from: data)
         }
 
         let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -651,12 +717,70 @@ final class ProductService: ObservableObject {
         throw TrialStartError.server(message ?? "Couldn't start your trial right now.")
     }
 
+    private nonisolated static func fetchTrialEntitlement(identity: String) async throws -> TrialEntitlementResponse {
+        var components = URLComponents(url: trialStartURL, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "identity", value: identity)]
+
+        guard let url = components?.url else {
+            throw TrialStartError.invalidResponse
+        }
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(from: url)
+        } catch {
+            throw TrialStartError.transport
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw TrialStartError.invalidResponse
+        }
+
+        if httpResponse.statusCode == 200 {
+            return try parseTrialEntitlementResponse(from: data)
+        }
+
+        if httpResponse.statusCode == 404 {
+            throw TrialStartError.notFound
+        }
+
+        let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let message = (payload?["error"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        throw TrialStartError.server(message ?? "Couldn't check your trial right now.")
+    }
+
+    private nonisolated static func parseTrialEntitlementResponse(from data: Data) throws -> TrialEntitlementResponse {
+        guard let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let status = payload["status"] as? String,
+              let email = payload["email"] as? String,
+              let startedAt = payload["startedAt"] as? String,
+              let expiresAt = payload["expiresAt"] as? String else {
+            throw TrialStartError.invalidResponse
+        }
+
+        return TrialEntitlementResponse(
+            status: status,
+            email: email,
+            startedAt: startedAt,
+            expiresAt: expiresAt
+        )
+    }
+
     private nonisolated static func isValidEmail(_ email: String) -> Bool {
         email.range(of: #"^[^\s@]+@[^\s@]+\.[^\s@]+$"#, options: .regularExpression) != nil
     }
 
     private nonisolated static func parseISO8601Date(_ value: String) -> Date? {
-        ISO8601DateFormatter().date(from: value)
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        if let date = formatter.date(from: value) {
+            return date
+        }
+
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: value)
     }
 
     private nonisolated static func parsePurchase(from payload: [String: Any]) -> GumroadPurchase? {
