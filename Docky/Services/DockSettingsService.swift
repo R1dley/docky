@@ -33,30 +33,25 @@ final class DockSettingsService: ObservableObject {
     @Published private(set) var showRecents: Bool = true
     @Published private(set) var showProcessIndicators: Bool = true
 
-    private static let changeNotification = Notification.Name("com.apple.dock.prefchanged")
-
-    private var notificationObserver: NSObjectProtocol?
-
     private init() {
         refresh()
-        notificationObserver = DistributedNotificationCenter.default().addObserver(
-            forName: Self.changeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.refresh()
-        }
-    }
-
-    deinit {
-        if let notificationObserver {
-            DistributedNotificationCenter.default().removeObserver(notificationObserver)
-        }
     }
 
     func refresh() {
         guard let values = DockPlistReader.read() else { return }
         applyValues(values)
+    }
+
+    func setTileSize(_ size: CGFloat) {
+        tileSize = size
+    }
+
+    func setLargeSize(_ size: CGFloat) {
+        largeSize = size
+    }
+
+    func setMagnification(_ isEnabled: Bool) {
+        magnification = isEnabled
     }
 
     private func applyValues(_ values: [String: Any]) {
@@ -70,8 +65,7 @@ final class DockSettingsService: ObservableObject {
             largeSize = CGFloat(value)
         }
         if let value = (values["magnification"] as? NSNumber)?.boolValue {
-            // TODO: implement magnification
-//            magnification = value
+            magnification = value
         }
         if let value = (values["autohide"] as? NSNumber)?.boolValue {
             autohide = value
@@ -95,4 +89,5 @@ final class DockSettingsService: ObservableObject {
             showProcessIndicators = value
         }
     }
+
 }

@@ -138,6 +138,59 @@ struct AppearanceSettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.vertical, 4)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Tile Size")
+                        .font(.headline)
+
+                    HStack {
+                        Slider(value: systemDockTileSizeBinding, in: 16...128, step: 1) {
+                            Text("Tile Size")
+                        }
+                        .labelsHidden()
+
+                        Text("\(Int(dockSettings.tileSize.rounded())) pt")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 48, alignment: .trailing)
+                    }
+
+                    Text("Seeded from the macOS Dock when you sync, then adjusted locally for Docky without writing back to the system Dock.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 4)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Magnification", isOn: systemDockMagnificationBinding)
+                        .font(.headline)
+
+                    Text("Seeded from the macOS Dock when you sync, then adjusted locally for Docky without writing back to the system Dock.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 4)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Magnified Size")
+                        .font(.headline)
+
+                    HStack {
+                        Slider(value: systemDockLargeSizeBinding, in: max(16, Double(dockSettings.tileSize.rounded()))...192, step: 1) {
+                            Text("Magnified Size")
+                        }
+                        .labelsHidden()
+
+                        Text("\(Int(dockSettings.largeSize.rounded())) pt")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 48, alignment: .trailing)
+                    }
+
+                    Text("Sets Docky's larger icon size after the last system Dock sync, without writing back to the system Dock.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 4)
+                .disabled(!dockSettings.magnification)
             }
 
             Section("Window Shape") {
@@ -276,6 +329,27 @@ struct AppearanceSettingsView: View {
     private var maximumCornerRadius: CGFloat {
         let iconHeight = dockSettings.magnification ? dockSettings.largeSize : dockSettings.tileSize
         return (iconHeight + preferences.tileVerticalPadding * 2) / 2
+    }
+
+    private var systemDockTileSizeBinding: Binding<Double> {
+        Binding(
+            get: { Double(dockSettings.tileSize) },
+            set: { dockSettings.setTileSize(CGFloat($0)) }
+        )
+    }
+
+    private var systemDockMagnificationBinding: Binding<Bool> {
+        Binding(
+            get: { dockSettings.magnification },
+            set: { dockSettings.setMagnification($0) }
+        )
+    }
+
+    private var systemDockLargeSizeBinding: Binding<Double> {
+        Binding(
+            get: { Double(dockSettings.largeSize) },
+            set: { dockSettings.setLargeSize(CGFloat(max($0, Double(dockSettings.tileSize)))) }
+        )
     }
 
     private var windowCornerRadiusBinding: Binding<CGFloat> {

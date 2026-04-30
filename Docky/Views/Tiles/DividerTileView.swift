@@ -64,6 +64,7 @@ struct DividerTileView: View {
     private var troubleshootActions: [ContextAction] {
         [
             .action("Sync Dock") {
+                DockSettingsService.shared.refresh()
                 TileStore.shared.refresh()
             }
         ]
