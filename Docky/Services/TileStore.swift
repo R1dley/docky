@@ -12,9 +12,12 @@
 
 import AppKit
 import Combine
+import os.log
 
 final class TileStore: ObservableObject {
     static let shared = TileStore()
+
+    private static let logger = Logger(subsystem: "gt.quintero.Docky", category: "TileStore")
 
     @Published private(set) var tiles: [Tile] = []
 
@@ -252,22 +255,27 @@ final class TileStore: ObservableObject {
     }
 
     func setPinnedTileOrder(ids: [String]) {
+        TileStore.logger.info("setPinnedTileOrder called with ids.count=\(ids.count) pinnedTiles.count=\(self.pinnedTiles.count)")
         guard ids.count == pinnedTiles.count else {
+            TileStore.logger.warning("setPinnedTileOrder early return: count mismatch ids=\(ids.count) pinnedTiles=\(self.pinnedTiles.count)")
             return
         }
 
         let tilesByID = Dictionary(uniqueKeysWithValues: pinnedTiles.map { ($0.id, $0) })
         let reorderedTiles = ids.compactMap { tilesByID[$0] }
         guard reorderedTiles.count == pinnedTiles.count else {
+            TileStore.logger.warning("setPinnedTileOrder: reorderedTiles count mismatch: \(reorderedTiles.count) vs \(self.pinnedTiles.count)")
             return
         }
 
-        let itemsByID = Dictionary(uniqueKeysWithValues: preferences.pinnedItems.map { (Self.pinnedTileID(for: $0), $0) })
+        let allItemIDs = preferences.pinnedItems.map { Self.pinnedTileID(for: $0) }
+        let idsSet = Set(ids)
+        let filteredItems = preferences.pinnedItems.filter { idsSet.contains(Self.pinnedTileID(for: $0)) }
+
+        let itemsByID = Dictionary(uniqueKeysWithValues: filteredItems.map { (Self.pinnedTileID(for: $0), $0) })
         let reorderedItems = ids.compactMap { itemsByID[$0] }
-        guard reorderedItems.count == preferences.pinnedItems.count else {
-            return
-        }
 
+        TileStore.logger.info("setPinnedTileOrder: applying reorder, reorderedItems count=\(reorderedItems.count)")
         pinnedTiles = reorderedTiles
         preferences.pinnedItems = reorderedItems
         rebuildTiles()
