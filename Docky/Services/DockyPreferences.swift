@@ -839,23 +839,23 @@ final class DockyPreferences: ObservableObject {
         }
     }
 
-    /// How long the cursor must rest on a widget before it grows. Zero = immediate.
-    @Published var widgetHoverGrowDelay: TimeInterval {
+    /// How long the cursor must rest on a widget before its expanded preview appears. Zero = immediate.
+    @Published var widgetHoverPreviewDelay: TimeInterval {
         didSet {
-            let clampedValue = max(0, widgetHoverGrowDelay)
+            let clampedValue = max(0, widgetHoverPreviewDelay)
             guard clampedValue != oldValue else {
-                if widgetHoverGrowDelay != clampedValue {
-                    widgetHoverGrowDelay = clampedValue
+                if widgetHoverPreviewDelay != clampedValue {
+                    widgetHoverPreviewDelay = clampedValue
                 }
                 return
             }
 
-            if widgetHoverGrowDelay != clampedValue {
-                widgetHoverGrowDelay = clampedValue
+            if widgetHoverPreviewDelay != clampedValue {
+                widgetHoverPreviewDelay = clampedValue
                 return
             }
 
-            defaults.set(clampedValue, forKey: Keys.widgetHoverGrowDelay)
+            defaults.set(clampedValue, forKey: Keys.widgetHoverPreviewDelay)
         }
     }
 
@@ -1177,7 +1177,7 @@ final class DockyPreferences: ObservableObject {
         static let hidesSystemDock = "docky.hidesSystemDock"
         static let overflowBehavior = "docky.overflowBehavior"
         static let windowAxisSizing = "docky.windowAxisSizing"
-        static let widgetHoverGrowDelay = "docky.widgetHoverGrowDelay"
+        static let widgetHoverPreviewDelay = "docky.widgetHoverGrowDelay"
         static let showsActivePinnedSeparator = "docky.showsActivePinnedSeparator"
         static let activeIndicatorShape = "docky.activeIndicatorShape"
         static let activeIndicatorImagePath = "docky.activeIndicatorImagePath"
@@ -1219,7 +1219,7 @@ final class DockyPreferences: ObservableObject {
         static let hidesSystemDock = true
         static let overflowBehavior: DockOverflowBehavior = .rescale
         static let windowAxisSizing: DockWindowAxisSizing = .fitContent
-        static let widgetHoverGrowDelay: TimeInterval = 0.5
+        static let widgetHoverPreviewDelay: TimeInterval = 0.5
         static let showsActivePinnedSeparator = true
         static let activeIndicatorShape: DockTileIndicatorShape = .dot
         static let activeIndicatorImagePath: String? = nil
@@ -1262,7 +1262,7 @@ final class DockyPreferences: ObservableObject {
         let storedHidesSystemDock = defaults.object(forKey: Keys.hidesSystemDock) as? Bool
         let storedOverflowBehavior = defaults.string(forKey: Keys.overflowBehavior)
         let storedWindowAxisSizing = defaults.string(forKey: Keys.windowAxisSizing)
-        let storedWidgetHoverGrowDelay = defaults.object(forKey: Keys.widgetHoverGrowDelay) as? Double
+        let storedWidgetHoverPreviewDelay = defaults.object(forKey: Keys.widgetHoverPreviewDelay) as? Double
         let storedShowsActivePinnedSeparator = defaults.object(forKey: Keys.showsActivePinnedSeparator) as? Bool
         let storedActiveIndicatorShape = defaults.string(forKey: Keys.activeIndicatorShape)
         let storedActiveIndicatorImagePath = defaults.string(forKey: Keys.activeIndicatorImagePath)
@@ -1304,7 +1304,7 @@ final class DockyPreferences: ObservableObject {
         self.hidesSystemDock = storedHidesSystemDock ?? DefaultValues.hidesSystemDock
         self.overflowBehavior = (storedOverflowBehavior.flatMap(DockOverflowBehavior.init(rawValue:)) ?? DefaultValues.overflowBehavior)
         self.windowAxisSizing = (storedWindowAxisSizing.flatMap(DockWindowAxisSizing.init(rawValue:)) ?? DefaultValues.windowAxisSizing)
-        self.widgetHoverGrowDelay = max(storedWidgetHoverGrowDelay ?? DefaultValues.widgetHoverGrowDelay, 0)
+        self.widgetHoverPreviewDelay = max(storedWidgetHoverPreviewDelay ?? DefaultValues.widgetHoverPreviewDelay, 0)
         self.showsActivePinnedSeparator = storedShowsActivePinnedSeparator ?? DefaultValues.showsActivePinnedSeparator
         self.activeIndicatorShape = (storedActiveIndicatorShape.flatMap(DockTileIndicatorShape.init(rawValue:)) ?? DefaultValues.activeIndicatorShape)
         self.activeIndicatorImagePath = storedActiveIndicatorImagePath ?? DefaultValues.activeIndicatorImagePath
@@ -1371,7 +1371,7 @@ final class DockyPreferences: ObservableObject {
         hidesSystemDock = DefaultValues.hidesSystemDock
         overflowBehavior = DefaultValues.overflowBehavior
         windowAxisSizing = DefaultValues.windowAxisSizing
-        widgetHoverGrowDelay = DefaultValues.widgetHoverGrowDelay
+        widgetHoverPreviewDelay = DefaultValues.widgetHoverPreviewDelay
         showsActivePinnedSeparator = DefaultValues.showsActivePinnedSeparator
         activeIndicatorShape = DefaultValues.activeIndicatorShape
         activeIndicatorImagePath = DefaultValues.activeIndicatorImagePath

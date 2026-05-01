@@ -169,23 +169,23 @@ struct BehaviorSettingsView: View {
 
             Section("Widgets") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Hover Hold to Grow")
+                    Text("Hover Preview Delay")
                         .font(.headline)
 
                     HStack {
-                        Slider(value: $preferences.widgetHoverGrowDelay, in: 0...2, step: 0.05) {
-                            Text("Hover Hold to Grow")
+                        Slider(value: $preferences.widgetHoverPreviewDelay, in: 0...2, step: 0.05) {
+                            Text("Hover Preview Delay")
                         }
                         .labelsHidden()
 
-                        Text(preferences.widgetHoverGrowDelay == 0
+                        Text(preferences.widgetHoverPreviewDelay == 0
                             ? "Off"
-                            : "\(String(format: "%.2f", preferences.widgetHoverGrowDelay)) s")
+                            : "\(String(format: "%.2f", preferences.widgetHoverPreviewDelay)) s")
                             .foregroundStyle(.secondary)
                             .frame(width: 56, alignment: .trailing)
                     }
 
-                    Text("Time the cursor must rest on a widget before it grows. Set to zero for an immediate grow.")
+                    Text("Time the cursor must rest on a widget before its expanded preview window appears. Set to zero for an immediate preview.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

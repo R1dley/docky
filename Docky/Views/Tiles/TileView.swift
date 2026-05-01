@@ -29,9 +29,7 @@ struct TileView: View {
     @State private var isAppFolderPopoverPresented = false
     @State private var isAppFolderListMenuPresented = false
     @State private var isContextMenuPresented = false
-    @State private var isGrown = false
-    @State private var hoverEnterTask: Task<Void, Never>?
-    @State private var hoverExitTask: Task<Void, Never>?
+    @State private var widgetExpansionTask: Task<Void, Never>?
     @State private var folderSnapshot: FolderContentsSnapshot = .loaded([])
     @State private var lastFolderPopoverDismissedAt: TimeInterval = 0
 
@@ -52,9 +50,6 @@ struct TileView: View {
     }
 
     private func contextActions(modifierFlags: NSEvent.ModifierFlags) -> [ContextAction] {
-        if isGrown {
-            return []
-        }
         if lockedProductFeature != nil {
             return lockedContextActions()
         }
@@ -381,29 +376,7 @@ struct TileView: View {
         let _ = Self._printChanges()
         #endif
 
-        if isHoverGrowEligible {
-            hoverGrowingBody
-        } else {
-            tileBody
-        }
-    }
-
-    private var hoverGrowingBody: some View {
-        GeometryReader { geo in
-            let target = hoverGrowSize(in: geo.size)
-            tileBody
-                .frame(
-                    width: isGrown ? target.width : geo.size.width,
-                    height: isGrown ? target.height : geo.size.height
-                )
-                .frame(
-                    width: geo.size.width,
-                    height: geo.size.height,
-                    alignment: hoverGrowAnchorAlignment
-                )
-                .animation(.spring(response: 0.32, dampingFraction: 0.78), value: isGrown)
-        }
-        .zIndex(isGrown ? 1000 : 0)
+        tileBody
     }
 
     private var tileBody: some View {
@@ -431,22 +404,24 @@ struct TileView: View {
             .contentShape(Rectangle())
             .onHover(perform: updateHoverState)
             .onTapGesture(perform: handleTap)
+            .background {
+                GeometryReader { proxy in
+                    Color.clear.onChange(of: isHovering) { _, isHovering in
+                        updateWidgetExpansionPresentation(isHovering: isHovering, sourceFrame: proxy.frame(in: .global))
+                    }
+                }
+            }
             .onDisappear {
-                hoverEnterTask?.cancel()
-                hoverEnterTask = nil
-                hoverExitTask?.cancel()
-                hoverExitTask = nil
+                widgetExpansionTask?.cancel()
+                widgetExpansionTask = nil
                 isHovering = false
-                isGrown = false
+                WidgetExpansionWindowController.shared.dismiss(sourceTileID: tile.id)
                 isTooltipPresented = false
                 isFolderPopoverPresented = false
                 isFolderListMenuPresented = false
                 isAppFolderPopoverPresented = false
                 isAppFolderListMenuPresented = false
                 isContextMenuPresented = false
-                if isHoverGrowEligible {
-                    WidgetHoverGrowService.shared.setHovered(false, identifier: tile.id)
-                }
             }
             .onChange(of: isFolderPopoverPresented) { _, isPresented in
                 updateTooltipPresentation()
@@ -460,10 +435,10 @@ struct TileView: View {
                 updateTooltipPresentation()
             }
             .onChange(of: editMode.isActive) { _, isActive in
-                guard isActive, isHoverGrowEligible else { return }
-                hoverEnterTask?.cancel()
-                hoverEnterTask = nil
-                applyGrownState(false)
+                guard isActive else { return }
+                widgetExpansionTask?.cancel()
+                widgetExpansionTask = nil
+                WidgetExpansionWindowController.shared.dismiss(sourceTileID: tile.id)
             }
             .background {
                 ContextActionMenuPresenter(
@@ -793,7 +768,7 @@ struct TileView: View {
                     cornerRadius: nonAppTileCornerRadius,
                     renderedSpan: renderedWidgetSpan(for: displayedWidget.effectiveSpan),
                     isWithinStack: false,
-                    isExpanded: isGrown
+                    isExpanded: false
                 )
             } else {
                 AppTileView(
@@ -825,7 +800,7 @@ struct TileView: View {
                 cornerRadius: nonAppTileCornerRadius,
                 renderedSpan: renderedWidgetSpan(for: widget.effectiveSpan),
                 isWithinStack: false,
-                isExpanded: isGrown
+                isExpanded: false
             )
         case .smartStack(let stack):
             SmartStackTileView(
@@ -877,49 +852,17 @@ struct TileView: View {
     }
 
     private func updateHoverState(isHovering newValue: Bool) {
-        guard isHoverGrowEligible else {
+        guard expandableWidget != nil else {
             applyHoverState(newValue)
             return
         }
 
         if newValue {
-            hoverExitTask?.cancel()
-            hoverExitTask = nil
             applyHoverState(true)
-            scheduleGrowEnter()
             return
         }
 
-        hoverEnterTask?.cancel()
-        hoverEnterTask = nil
-
-        hoverExitTask?.cancel()
-        hoverExitTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(120))
-            guard !Task.isCancelled else { return }
-            applyHoverState(false)
-            applyGrownState(false)
-        }
-    }
-
-    private func scheduleGrowEnter() {
-        hoverEnterTask?.cancel()
-
-        guard !isContextMenuPresented, !editMode.isActive else {
-            return
-        }
-
-        let delaySeconds = max(0, preferences.widgetHoverGrowDelay)
-        if delaySeconds == 0 {
-            applyGrownState(true)
-            return
-        }
-        hoverEnterTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(delaySeconds))
-            guard !Task.isCancelled else { return }
-            guard !isContextMenuPresented, !editMode.isActive else { return }
-            applyGrownState(true)
-        }
+        applyHoverState(false)
     }
 
     private func applyHoverState(_ isHovering: Bool) {
@@ -927,60 +870,48 @@ struct TileView: View {
         updateTooltipPresentation()
     }
 
-    private func applyGrownState(_ grown: Bool) {
-        guard isGrown != grown else { return }
-        isGrown = grown
-        WidgetHoverGrowService.shared.setHovered(grown, identifier: tile.id, extent: expansionExtent)
-    }
-
-    private var isHoverGrowEligible: Bool {
+    private var expandableWidget: WidgetTile? {
         switch tile.content {
-        case .widget:
-            return true
+        case .widget(let widget):
+            return widget
         case .app(let app) where app.displayedWidget != nil:
-            return true
+            return app.displayedWidget
         default:
-            return false
+            return nil
         }
     }
 
-    private var hoverGrowSpanCount: Int {
+    private var expandableWidgetRenderedSpan: TileSpan {
         switch tile.content {
         case .widget(let widget):
-            return widget.effectiveSpan.rawValue
+            return renderedWidgetSpan(for: widget.effectiveSpan)
         case .app(let app):
-            return app.displayedWidget?.span.rawValue ?? 1
+            return renderedWidgetSpan(for: app.displayedWidget?.effectiveSpan ?? .one)
         default:
-            return 1
+            return .one
         }
     }
 
-    private func hoverGrowSize(in size: CGSize) -> CGSize {
-        let baseTileWidth = size.width / CGFloat(max(hoverGrowSpanCount, 1))
-        let extent = expansionExtent
-        return CGSize(
-            width: baseTileWidth * CGFloat(extent.widthTiles),
-            height: baseTileWidth * CGFloat(extent.heightTiles)
-        )
-    }
+    private func updateWidgetExpansionPresentation(isHovering: Bool, sourceFrame: CGRect) {
+        widgetExpansionTask?.cancel()
+        widgetExpansionTask = nil
 
-    private var expansionExtent: WidgetExpansionExtent {
-        switch tile.content {
-        case .widget(let widget):
-            return widget.kind.expansionExtent
-        case .app(let app):
-            return app.displayedWidget?.kind.expansionExtent ?? .standard
-        default:
-            return .standard
+        guard isHovering, let widget = expandableWidget, !isContextMenuPresented, !editMode.isActive else {
+            WidgetExpansionWindowController.shared.requestDismiss(sourceTileID: tile.id)
+            return
         }
-    }
 
-    private var hoverGrowAnchorAlignment: Alignment {
-        switch position {
-        case .top: .top
-        case .bottom: .bottom
-        case .left: .leading
-        case .right: .trailing
+        widgetExpansionTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(max(0, preferences.widgetHoverPreviewDelay)))
+            guard !Task.isCancelled else { return }
+            guard self.isHovering, !self.isContextMenuPresented, !self.editMode.isActive else { return }
+            WidgetExpansionWindowController.shared.present(
+                widget: widget,
+                sourceTileID: tile.id,
+                sourceFrame: sourceFrame,
+                cornerRadius: nonAppTileCornerRadius,
+                renderedSpan: expandableWidgetRenderedSpan
+            )
         }
     }
 
@@ -988,10 +919,10 @@ struct TileView: View {
         isContextMenuPresented = isPresented
         updateTooltipPresentation()
 
-        if isPresented, isHoverGrowEligible {
-            hoverEnterTask?.cancel()
-            hoverEnterTask = nil
-            applyGrownState(false)
+        if isPresented, expandableWidget != nil {
+            widgetExpansionTask?.cancel()
+            widgetExpansionTask = nil
+            WidgetExpansionWindowController.shared.dismiss(sourceTileID: tile.id)
         }
     }
 
@@ -1012,25 +943,7 @@ struct TileView: View {
             return
         }
 
-        if delaysTooltipForGrowAnimation {
-            let delaySeconds = max(0, preferences.widgetHoverGrowDelay) + 0.35
-            tooltipDelayTask = Task { @MainActor in
-                try? await Task.sleep(for: .seconds(delaySeconds))
-                guard !Task.isCancelled else { return }
-                isTooltipPresented = true
-            }
-        } else {
-            isTooltipPresented = true
-        }
-    }
-
-    private var delaysTooltipForGrowAnimation: Bool {
-        switch tile.content {
-        case .widget, .smartStack:
-            return true
-        default:
-            return false
-        }
+        isTooltipPresented = true
     }
 
     private func handleTap() {

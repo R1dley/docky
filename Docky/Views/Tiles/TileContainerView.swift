@@ -18,7 +18,6 @@ struct TileContainerView: View {
     @ObservedObject private var preferences = DockyPreferences.shared
     @ObservedObject private var editMode = DockEditModeService.shared
     @ObservedObject private var product = ProductService.shared
-    @ObservedObject private var widgetHoverGrow = WidgetHoverGrowService.shared
 
     @State private var draggedTileID: String?
     @State private var draggedTileOffset: CGFloat = 0
@@ -898,10 +897,6 @@ struct TileContainerView: View {
     }
 
     private func isTileDraggable(_ tile: Tile) -> Bool {
-        guard !isExpandedWidgetTile(tile) else {
-            return false
-        }
-
         switch tile.content {
         case .app(let app):
             return !app.bundleIdentifier.isEmpty && app.bundleIdentifier != "com.apple.finder"
@@ -915,17 +910,6 @@ struct TileContainerView: View {
             return editMode.isActive && (isPinnedReorderable(tileID: tile.id) || isTrailingReorderable(tileID: tile.id))
         case .folder, .trash:
             return editMode.isActive && isTrailingReorderable(tileID: tile.id)
-        }
-    }
-
-    private func isExpandedWidgetTile(_ tile: Tile) -> Bool {
-        switch tile.content {
-        case .widget:
-            widgetHoverGrow.isHovered(identifier: tile.id)
-        case .app(let app) where app.displayedWidget != nil:
-            widgetHoverGrow.isHovered(identifier: tile.id)
-        default:
-            false
         }
     }
 

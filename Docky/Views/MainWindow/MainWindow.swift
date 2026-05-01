@@ -196,13 +196,6 @@ final class MainWindow: NSWindow {
             }
             .store(in: &cancellables)
 
-        WidgetHoverGrowService.shared.$activeExtent
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.applyCurrentFrame(animated: true, duration: 0.18)
-            }
-            .store(in: &cancellables)
     }
 
     private func observeScreenAndSpaceInputs() {
@@ -454,13 +447,6 @@ final class MainWindow: NSWindow {
             compactWidgets: compactsWidgetsForOverflow,
             edgePadding: TileContainerView.edgePadding * contentScale
         )
-        let hoverPerpendicularExtra: CGFloat = {
-            guard let extent = WidgetHoverGrowService.shared.activeExtent else {
-                return 0
-            }
-            let perpendicularTiles = position.isVertical ? extent.widthTiles : extent.heightTiles
-            return scaledTileSize * CGFloat(max(0, perpendicularTiles - 1))
-        }()
         let displayedChromeAxisLength = min(axisLength(of: displayedContentSize, position: position), availableAxisLength)
         layout.setChromeSize(displayedChromeSize(
             for: displayedContentSize,
@@ -483,9 +469,7 @@ final class MainWindow: NSWindow {
             contentPadding: contentPadding,
             position: position
         )
-        let inflatedWidth = position.isVertical ? width + hoverPerpendicularExtra : width
-        let inflatedHeight = position.isVertical ? height : height + hoverPerpendicularExtra
-        let size = CGSize(width: inflatedWidth, height: inflatedHeight)
+        let size = CGSize(width: width, height: height)
         let origin = frameOrigin(
             in: screenBounds,
             size: size,
