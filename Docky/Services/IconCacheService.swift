@@ -38,6 +38,11 @@ final class IconCacheService {
         return image
     }
 
+    func preloadIcon(forBundleIdentifier bundleIdentifier: String, fileURL: URL) {
+        let key = "bundle:\(bundleIdentifier)" as NSString
+        cache.setObject(NSWorkspace.shared.icon(forFile: fileURL.path), forKey: key)
+    }
+
     func previewIcon(forFileURL url: URL) -> NSImage {
         if isImageFileURL(url), let image = image(forImageFileURL: url) {
             return image

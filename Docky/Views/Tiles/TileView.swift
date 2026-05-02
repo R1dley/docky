@@ -13,7 +13,6 @@ import SwiftUI
 struct TileView: View {
     let tile: Tile
     let isDragging: Bool
-    let isExternalFileDropTargeted: Bool
     @ObservedObject private var dockSettings = DockSettingsService.shared
     @ObservedObject private var layout = DockLayoutService.shared
     @ObservedObject private var preferences = DockyPreferences.shared
@@ -22,6 +21,7 @@ struct TileView: View {
     @ObservedObject private var mediaPlayback = MediaPlaybackService.shared
     @ObservedObject private var editMode = DockEditModeService.shared
     @ObservedObject private var widgetExpansion = WidgetExpansionWindowController.shared
+    @ObservedObject private var dockDrag = DockDragService.shared
     @State private var isHovering = false
     @State private var isTooltipPresented = false
     @State private var tooltipDelayTask: Task<Void, Never>?
@@ -37,10 +37,13 @@ struct TileView: View {
     private static let finderBundleIdentifier = "com.apple.finder"
     private static let folderPopoverRetapGuardInterval: TimeInterval = 0.25
 
-    init(tile: Tile, isDragging: Bool = false, isExternalFileDropTargeted: Bool = false) {
+    private var isDocumentDropTarget: Bool {
+        dockDrag.documentTargetTileID == tile.id
+    }
+
+    init(tile: Tile, isDragging: Bool = false) {
         self.tile = tile
         self.isDragging = isDragging
-        self.isExternalFileDropTargeted = isExternalFileDropTargeted
         self._dockSettings = ObservedObject(wrappedValue: DockSettingsService.shared)
         self._layout = ObservedObject(wrappedValue: DockLayoutService.shared)
         self._preferences = ObservedObject(wrappedValue: DockyPreferences.shared)
@@ -49,6 +52,7 @@ struct TileView: View {
         self._mediaPlayback = ObservedObject(wrappedValue: MediaPlaybackService.shared)
         self._editMode = ObservedObject(wrappedValue: DockEditModeService.shared)
         self._widgetExpansion = ObservedObject(wrappedValue: WidgetExpansionWindowController.shared)
+        self._dockDrag = ObservedObject(wrappedValue: DockDragService.shared)
     }
 
     private func contextActions(modifierFlags: NSEvent.ModifierFlags) -> [ContextAction] {
@@ -397,10 +401,11 @@ struct TileView: View {
                 }
             }
             .overlay {
-                if isExternalFileDropTargeted {
+                if isDocumentDropTarget {
                     laidOutContent
                         .disabled(true)
                         .colorMultiply(.black.opacity(0.25))
+                        .allowsHitTesting(false)
                 }
             }
             .contentShape(Rectangle())

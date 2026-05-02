@@ -19,7 +19,6 @@ struct FolderPopoverView: View {
     @State private var currentEntry: FolderPopoverEntry
     @State private var backHistory: [FolderPopoverEntry]
     @State private var selectedItemID: String?
-    @State private var isDropTargeted = false
     @State private var watchedEntryURL: URL?
 
     private let maxGridColumnCount = 6
@@ -58,11 +57,6 @@ struct FolderPopoverView: View {
         #endif
 
         bodyContent
-            .onDrop(of: [UTType.fileURL], delegate: FolderPopoverDropDelegate(
-                destinationURL: currentEntry.url,
-                isTargeted: $isDropTargeted,
-                onDrop: handleDroppedItems
-            ))
             .task(id: reloadKey) {
                 syncWatchedFolder()
                 currentEntry = refreshedEntry(for: currentEntry)
@@ -103,14 +97,6 @@ struct FolderPopoverView: View {
             }
         }
         .frame(width: popoverWidth, height: popoverHeight)
-        .overlay {
-            if isDropTargeted {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(.white.opacity(0.45), lineWidth: 2)
-                    .padding(8)
-                    .allowsHitTesting(false)
-            }
-        }
     }
 
     private var items: [URL] {
@@ -460,132 +446,6 @@ struct FolderPopoverView: View {
         onPopoverSizeChange(popoverSize)
     }
 
-    private func handleDroppedItems(_ itemURLs: [URL]) {
-        guard !itemURLs.isEmpty else { return }
-
-        let destinationURL = currentEntry.url
-        let didMoveAnyItems = itemURLs.reduce(into: false) { didMoveAnyItems, itemURL in
-            guard shouldAcceptDrop(itemURL, into: destinationURL) else {
-                return
-            }
-
-            let destinationItemURL = uniqueDestinationURL(for: itemURL, in: destinationURL)
-            do {
-                try FileManager.default.moveItem(at: itemURL, to: destinationItemURL)
-                didMoveAnyItems = true
-            } catch {
-                presentDropError(for: itemURL, error: error)
-            }
-        }
-
-        guard didMoveAnyItems else { return }
-        currentEntry = refreshedEntry(for: currentEntry)
-        backHistory = backHistory.map(refreshedEntry(for:))
-        selectDefaultItemIfNeeded()
-        reportPopoverSize()
-    }
-
-    private func shouldAcceptDrop(_ itemURL: URL, into destinationURL: URL) -> Bool {
-        let standardizedItemURL = itemURL.standardizedFileURL
-        let standardizedDestinationURL = destinationURL.standardizedFileURL
-
-        guard standardizedItemURL != standardizedDestinationURL else {
-            return false
-        }
-
-        return !standardizedDestinationURL.path.hasPrefix(standardizedItemURL.path + "/")
-    }
-
-    private func uniqueDestinationURL(for itemURL: URL, in destinationURL: URL) -> URL {
-        let fileManager = FileManager.default
-        let fileExtension = itemURL.pathExtension
-        let baseName = itemURL.deletingPathExtension().lastPathComponent
-        var candidateURL = destinationURL.appending(path: itemURL.lastPathComponent)
-        var duplicateIndex = 2
-
-        while fileManager.fileExists(atPath: candidateURL.path) {
-            let candidateName = if fileExtension.isEmpty {
-                "\(baseName) \(duplicateIndex)"
-            } else {
-                "\(baseName) \(duplicateIndex).\(fileExtension)"
-            }
-            candidateURL = destinationURL.appending(path: candidateName)
-            duplicateIndex += 1
-        }
-
-        return candidateURL
-    }
-
-    private func presentDropError(for itemURL: URL, error: Error) {
-        let alert = NSAlert()
-        alert.messageText = "Couldn't add item to folder"
-        alert.informativeText = "Docky couldn't move \(displayName(for: itemURL)) into \(currentEntry.displayName). \(error.localizedDescription)"
-        alert.alertStyle = .warning
-        alert.runModal()
-    }
-}
-
-private struct FolderPopoverDropDelegate: DropDelegate {
-    let destinationURL: URL
-    @Binding var isTargeted: Bool
-    let onDrop: ([URL]) -> Void
-
-    func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [UTType.fileURL])
-    }
-
-    func dropEntered(info: DropInfo) {
-        isTargeted = validateDrop(info: info)
-    }
-
-    func dropExited(info: DropInfo) {
-        isTargeted = false
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: .move)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        isTargeted = false
-
-        let providers = info.itemProviders(for: [UTType.fileURL])
-        guard !providers.isEmpty else {
-            return false
-        }
-
-        resolveURLs(from: providers) { itemURLs in
-            let acceptedURLs = itemURLs.filter { $0.isFileURL }
-            guard !acceptedURLs.isEmpty else { return }
-            DispatchQueue.main.async {
-                onDrop(acceptedURLs)
-            }
-        }
-        return true
-    }
-
-    private func resolveURLs(from providers: [NSItemProvider], completion: @escaping ([URL]) -> Void) {
-        let dispatchGroup = DispatchGroup()
-        let lock = NSLock()
-        var resolvedURLs: [URL] = []
-
-        for provider in providers {
-            dispatchGroup.enter()
-            provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
-                defer { dispatchGroup.leave() }
-                guard let data, let url = URL(dataRepresentation: data, relativeTo: nil) else {
-                    return
-                }
-                lock.lock()
-                resolvedURLs.append(url)
-                lock.unlock()
-            }
-        }
-
-        dispatchGroup.notify(queue: .global(qos: .userInitiated)) {
-            completion(resolvedURLs)
-        }
-    }
 }
 
 private struct FolderPopoverEntry: Equatable {

@@ -170,6 +170,7 @@ final class MainWindow: NSWindow {
             preferences.$windowDisplayTarget.map { _ in () }.eraseToAnyPublisher(),
             editMode.$paletteDrag.map { _ in () }.eraseToAnyPublisher(),
             editMode.$paletteDropDestination.map { _ in () }.eraseToAnyPublisher(),
+            DockDragService.shared.$kind.map { _ in () }.eraseToAnyPublisher(),
         ]
         Publishers.MergeMany(layoutSignals)
             .receive(on: DispatchQueue.main)
@@ -386,10 +387,20 @@ final class MainWindow: NSWindow {
         let position = preferences.windowPosition.resolved(systemOrientation: dockSettings.orientation)
         let baseTileSize = dockSettings.displayTileSize
         let baseTileHeight = baseTileSize + preferences.tileVerticalPadding * 2
+        let externalAppDropPreview: AppTile? = {
+            if case let .app(_, tile) = DockDragService.shared.kind { return tile }
+            return nil
+        }()
+        let externalFolderDropPreview: FolderTile? = {
+            if case let .folder(_, tile) = DockDragService.shared.kind { return tile }
+            return nil
+        }()
         let sizingTiles = TileContainerView.previewedTiles(
             from: tileStore.tiles,
             paletteDrag: editMode.paletteDrag,
-            paletteDropDestination: editMode.paletteDropDestination
+            paletteDropDestination: editMode.paletteDropDestination,
+            externalAppDropPreview: externalAppDropPreview,
+            externalFolderDropPreview: externalFolderDropPreview
         )
         let naturalContentSize = TileContainerView.contentSize(
             tiles: sizingTiles,

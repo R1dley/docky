@@ -7,6 +7,7 @@
 
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct MainWindowView: View {
     private let borderWidth: CGFloat = 1
@@ -121,7 +122,104 @@ struct MainWindowView: View {
 }
 
 final class ClickThroughHostingView<Content: View>: NSHostingView<Content> {
+    @MainActor required init(rootView: Content) {
+        super.init(rootView: rootView)
+        registerForDraggedTypes([.fileURL, .string])
+    }
+
+    @objc required dynamic init?(coder aDecoder: NSCoder) {
+        super.init(coder: aDecoder)
+        registerForDraggedTypes([.fileURL, .string])
+    }
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
+    }
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        let location = convert(sender.draggingLocation, from: nil)
+        let urls = readURLs(from: sender)
+        if let kind = DockDragService.resolvePreview(from: urls) {
+            DockDragService.shared.begin(kind: kind, at: location)
+            return .copy
+        }
+        if DockEditModeService.shared.paletteDrag != nil {
+            DockDragService.shared.cursorLocation = location
+            return .copy
+        }
+        return []
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        let location = convert(sender.draggingLocation, from: nil)
+        if DockDragService.shared.kind != nil {
+            DockDragService.shared.updateCursor(location)
+            return .copy
+        }
+        if DockEditModeService.shared.paletteDrag != nil {
+            DockDragService.shared.cursorLocation = location
+            return .copy
+        }
+        return []
+    }
+
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+        DockDragService.shared.clear()
+        if DockEditModeService.shared.paletteDrag != nil {
+            DockEditModeService.shared.endPaletteDrag()
+        }
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        if let kind = DockDragService.shared.kind {
+            defer { DockDragService.shared.clear() }
+            switch kind {
+            case .app(_, let tile):
+                guard let index = DockDragService.shared.destinationIndex else { return false }
+                return TileStore.shared.pinApp(bundleIdentifier: tile.bundleIdentifier, at: index)
+            case .folder(let url, let tile):
+                guard let index = DockDragService.shared.destinationIndex else { return false }
+                TileStore.shared.insertTrailingItem(
+                    .folder(url: url, displayName: tile.displayName),
+                    at: index
+                )
+                return true
+            case .document(let urls):
+                guard let targetTileID = DockDragService.shared.documentTargetTileID,
+                      let bundleIdentifier = TileStore.shared.tiles
+                        .first(where: { $0.id == targetTileID })
+                        .flatMap({ tile -> String? in
+                            if case .app(let app) = tile.content { return app.bundleIdentifier }
+                            return nil
+                        }) else {
+                    return false
+                }
+                WorkspaceService.shared.open(fileURLs: urls, withApplicationBundleIdentifier: bundleIdentifier)
+                return true
+            }
+        }
+        if let paletteDrag = DockEditModeService.shared.paletteDrag,
+           let destination = DockEditModeService.shared.paletteDropDestination {
+            defer {
+                DockEditModeService.shared.endPaletteDrag()
+                DockDragService.shared.cursorLocation = nil
+            }
+            switch destination.section {
+            case .pinned:
+                guard let item = TileContainerView.makePinnedItem(from: paletteDrag) else { return false }
+                TileStore.shared.insertPinnedItem(item, at: destination.index)
+                return true
+            case .trailing:
+                guard let item = TileContainerView.makeTrailingItem(from: paletteDrag) else { return false }
+                TileStore.shared.insertTrailingItem(item, at: destination.index)
+                return true
+            }
+        }
+        return false
+    }
+
+    private func readURLs(from sender: any NSDraggingInfo) -> [URL] {
+        let pasteboard = sender.draggingPasteboard
+        return (pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL]) ?? []
     }
 }
