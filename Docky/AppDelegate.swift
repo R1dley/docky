@@ -68,7 +68,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             SystemDockVisibilityService.shared.restore()
         }
 
+        #if !DEBUG
         SentrySDK.close()
+        #endif
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
@@ -191,6 +193,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func configureSentry() {
+        #if DEBUG
+        return
+        #else
         SentrySDK.start { options in
             options.dsn = "https://5eebd9ca17d595aa7c9cdebc54a0746a@o4511308909510656.ingest.us.sentry.io/4511308910952448"
             options.sendDefaultPii = false
@@ -212,16 +217,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 return log
             }
         }
+        #endif
     }
 
     private func logSessionStart() {
+        #if !DEBUG
         SentrySDK.logger.info("Docky session started", attributes: sessionLogAttributes(phase: "start"))
+        #endif
     }
 
     private func logSessionEnd() {
+        #if !DEBUG
         var attributes = sessionLogAttributes(phase: "end")
         attributes["session.duration_ms"] = Int(Date().timeIntervalSince(sessionStartedAt) * 1000)
         SentrySDK.logger.info("Docky session ended", attributes: attributes)
+        #endif
     }
 
     private func sessionLogAttributes(phase: String) -> [String: Any] {
