@@ -43,6 +43,10 @@ struct DividerTileView: View {
             },
             .submenu("Troubleshoot", children: troubleshootActions),
             .divider,
+            .action("About Docky") {
+                NSApp.activate(ignoringOtherApps: true)
+                NSApp.orderFrontStandardAboutPanel(nil)
+            },
             .action("Settings...") {
                 (NSApp.delegate as? AppDelegate)?.showSettingsWindow(nil)
             },
