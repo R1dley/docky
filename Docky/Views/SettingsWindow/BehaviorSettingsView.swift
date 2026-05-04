@@ -151,6 +151,27 @@ struct BehaviorSettingsView: View {
             .disabled(!preferences.autohidesWindow)
 
             VStack(alignment: .leading, spacing: 8) {
+                Text("Fullscreen Reveal Delay")
+                    .font(.headline)
+
+                HStack {
+                    Slider(value: $preferences.fullscreenRevealDelay, in: 0...2, step: 0.05) {
+                        Text("Fullscreen Reveal Delay")
+                    }
+                    .labelsHidden()
+
+                    Text("\(String(format: "%.2f", preferences.fullscreenRevealDelay)) s")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 56, alignment: .trailing)
+                }
+
+                Text("How long the pointer must dwell at the screen edge before Docky reveals while a fullscreen app is active. Mirrors the macOS Dock's intent gating.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+
+            VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Overflow Behavior")
                         .font(.headline)

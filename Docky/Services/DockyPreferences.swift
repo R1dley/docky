@@ -839,6 +839,28 @@ final class DockyPreferences: ObservableObject {
         }
     }
 
+    /// Dwell time the pointer must spend at the screen edge before Docky
+    /// reveals while a fullscreen app is on the target screen. Mirrors the
+    /// macOS Dock's intent-gating behavior in fullscreen.
+    @Published var fullscreenRevealDelay: TimeInterval {
+        didSet {
+            let clampedValue = max(0, fullscreenRevealDelay)
+            guard clampedValue != oldValue else {
+                if fullscreenRevealDelay != clampedValue {
+                    fullscreenRevealDelay = clampedValue
+                }
+                return
+            }
+
+            if fullscreenRevealDelay != clampedValue {
+                fullscreenRevealDelay = clampedValue
+                return
+            }
+
+            defaults.set(clampedValue, forKey: Keys.fullscreenRevealDelay)
+        }
+    }
+
     /// Whether Docky should hide the macOS system Dock while running.
     /// Turning this on snapshots the user's current Dock preferences and
     /// overwrites autohide/bounce behavior; turning it off restores the
@@ -1243,6 +1265,7 @@ final class DockyPreferences: ObservableObject {
         static let autohidesWindow = "docky.autohidesWindow"
         static let opensAtLogin = "docky.opensAtLogin"
         static let autohideWindowDelay = "docky.autohideWindowDelay"
+        static let fullscreenRevealDelay = "docky.fullscreenRevealDelay"
         static let hidesSystemDock = "docky.hidesSystemDock"
         static let overflowBehavior = "docky.overflowBehavior"
         static let windowAxisSizing = "docky.windowAxisSizing"
@@ -1290,6 +1313,7 @@ final class DockyPreferences: ObservableObject {
         static let autohidesWindow = false
         static let opensAtLogin = true
         static let autohideWindowDelay: TimeInterval = 0.5
+        static let fullscreenRevealDelay: TimeInterval = 0.5
         static let hidesSystemDock = true
         static let overflowBehavior: DockOverflowBehavior = .rescale
         static let windowAxisSizing: DockWindowAxisSizing = .fitContent
@@ -1338,6 +1362,7 @@ final class DockyPreferences: ObservableObject {
         let storedAutohidesWindow = defaults.object(forKey: Keys.autohidesWindow) as? Bool
         let storedOpensAtLogin = defaults.object(forKey: Keys.opensAtLogin) as? Bool
         let storedAutohideWindowDelay = defaults.object(forKey: Keys.autohideWindowDelay) as? Double
+        let storedFullscreenRevealDelay = defaults.object(forKey: Keys.fullscreenRevealDelay) as? Double
         let storedHidesSystemDock = defaults.object(forKey: Keys.hidesSystemDock) as? Bool
         let storedOverflowBehavior = defaults.string(forKey: Keys.overflowBehavior)
         let storedWindowAxisSizing = defaults.string(forKey: Keys.windowAxisSizing)
@@ -1385,6 +1410,7 @@ final class DockyPreferences: ObservableObject {
         self.autohidesWindow = storedAutohidesWindow ?? DefaultValues.autohidesWindow
         self.opensAtLogin = storedOpensAtLogin ?? LaunchAtLoginService.shared.isEnabled
         self.autohideWindowDelay = max(storedAutohideWindowDelay ?? DefaultValues.autohideWindowDelay, 0)
+        self.fullscreenRevealDelay = max(storedFullscreenRevealDelay ?? DefaultValues.fullscreenRevealDelay, 0)
         self.hidesSystemDock = storedHidesSystemDock ?? DefaultValues.hidesSystemDock
         self.overflowBehavior = (storedOverflowBehavior.flatMap(DockOverflowBehavior.init(rawValue:)) ?? DefaultValues.overflowBehavior)
         self.windowAxisSizing = (storedWindowAxisSizing.flatMap(DockWindowAxisSizing.init(rawValue:)) ?? DefaultValues.windowAxisSizing)
@@ -1461,6 +1487,7 @@ final class DockyPreferences: ObservableObject {
         autohidesWindow = DefaultValues.autohidesWindow
         opensAtLogin = DefaultValues.opensAtLogin
         autohideWindowDelay = DefaultValues.autohideWindowDelay
+        fullscreenRevealDelay = DefaultValues.fullscreenRevealDelay
         hidesSystemDock = DefaultValues.hidesSystemDock
         overflowBehavior = DefaultValues.overflowBehavior
         windowAxisSizing = DefaultValues.windowAxisSizing

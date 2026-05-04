@@ -88,6 +88,8 @@ final class MainWindow: NSWindow {
     private let minimumWidth: CGFloat = 120
     private var cancellables: Set<AnyCancellable> = []
     private var hideWorkItem: DispatchWorkItem?
+    private var fullscreenRecheckWorkItem: DispatchWorkItem?
+    private var fullscreenRevealWorkItem: DispatchWorkItem?
     private var globalPointerMonitor: Any?
     private var localPointerMonitor: Any?
     private var globalDragRevealMonitor: Any?
@@ -98,6 +100,11 @@ final class MainWindow: NSWindow {
     private var hasCompletedSetup = false
     private var hasResolvedInitialFrame = false
     private var lastPointerScreenFrame: CGRect?
+    private var isFullscreenActiveOnTargetScreen = false
+
+    private var effectivelyAutohides: Bool {
+        preferences.autohidesWindow || isFullscreenActiveOnTargetScreen
+    }
 
     override init(contentRect: NSRect, styleMask style: NSWindow.StyleMask, backing backingStoreType: NSWindow.BackingStoreType, defer flag: Bool) {
         visibilityState = DockyPreferences.shared.autohidesWindow ? .hidden : .visible
@@ -125,9 +132,15 @@ final class MainWindow: NSWindow {
         observeVisibilityInputs()
         updatePointerScreenMonitoring()
         updateDragRevealMonitoring()
+        isFullscreenActiveOnTargetScreen = computeFullscreenStateOnTargetScreen()
+        if isFullscreenActiveOnTargetScreen {
+            visibilityState = shouldRemainVisible ? .visible : .hidden
+        }
     }
 
     deinit {
+        fullscreenRecheckWorkItem?.cancel()
+        fullscreenRevealWorkItem?.cancel()
         if let globalPointerMonitor {
             NSEvent.removeMonitor(globalPointerMonitor)
         }
@@ -204,10 +217,31 @@ final class MainWindow: NSWindow {
 
     private func observeScreenAndSpaceInputs() {
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
-            .merge(with: NotificationCenter.default.publisher(for: NSWorkspace.activeSpaceDidChangeNotification))
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.applyCurrentFrame(animated: false)
+                self?.updateFullscreenStateAndApply(animated: false)
+            }
+            .store(in: &cancellables)
+
+        let workspaceCenter = NSWorkspace.shared.notificationCenter
+
+        workspaceCenter.publisher(for: NSWorkspace.activeSpaceDidChangeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.applyCurrentFrame(animated: false)
+                self?.updateFullscreenStateAndApply(animated: true)
+                // The space change fires during the fullscreen exit animation
+                // while the fullscreen window is still on-screen. Re-check once
+                // the animation has had time to complete.
+                self?.scheduleFullscreenRecheck()
+            }
+            .store(in: &cancellables)
+
+        workspaceCenter.publisher(for: NSWorkspace.didActivateApplicationNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.updateFullscreenStateAndApply(animated: true)
             }
             .store(in: &cancellables)
     }
@@ -225,6 +259,7 @@ final class MainWindow: NSWindow {
             .sink { [weak self] _ in
                 self?.lastPointerScreenFrame = nil
                 self?.updatePointerScreenMonitoring()
+                self?.updateFullscreenStateAndApply(animated: true)
             }
             .store(in: &cancellables)
 
@@ -241,8 +276,8 @@ final class MainWindow: NSWindow {
     private func observeVisibilityInputs() {
         preferences.$autohidesWindow
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] autohidesWindow in
-                self?.handleAutohideChanged(autohidesWindow)
+            .sink { [weak self] _ in
+                self?.applyEffectiveVisibility(animated: true)
             }
             .store(in: &cancellables)
     }
@@ -302,6 +337,7 @@ final class MainWindow: NSWindow {
         lastPointerScreenFrame = nextScreenFrame
         DispatchQueue.main.async { [weak self] in
             self?.applyCurrentFrame(animated: false)
+            self?.updateFullscreenStateAndApply(animated: true)
         }
     }
 
@@ -309,13 +345,40 @@ final class MainWindow: NSWindow {
         isPointerInsideWindow = true
         hideWorkItem?.cancel()
 
-        guard preferences.autohidesWindow else { return }
+        guard effectivelyAutohides else { return }
+
+        if shouldDwellBeforeReveal {
+            scheduleFullscreenReveal()
+            return
+        }
+
         setVisibility(.visible, animated: true)
     }
 
     func pointerDidExitWindow() {
         isPointerInsideWindow = false
+        fullscreenRevealWorkItem?.cancel()
+        fullscreenRevealWorkItem = nil
         scheduleHideIfNeeded()
+    }
+
+    private var shouldDwellBeforeReveal: Bool {
+        isFullscreenActiveOnTargetScreen
+            && visibilityState == .hidden
+            && preferences.fullscreenRevealDelay > 0
+    }
+
+    private func scheduleFullscreenReveal() {
+        fullscreenRevealWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.isPointerInsideWindow,
+                  self.effectivelyAutohides
+            else { return }
+            self.setVisibility(.visible, animated: true)
+        }
+        fullscreenRevealWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + preferences.fullscreenRevealDelay, execute: workItem)
     }
 
     private func syncPointerPresenceForDragSession() {
@@ -331,7 +394,7 @@ final class MainWindow: NSWindow {
         activeInteractionCount += 1
         hideWorkItem?.cancel()
 
-        guard preferences.autohidesWindow else { return }
+        guard effectivelyAutohides else { return }
         setVisibility(.visible, animated: true)
     }
 
@@ -340,22 +403,22 @@ final class MainWindow: NSWindow {
         scheduleHideIfNeeded()
     }
 
-    private func handleAutohideChanged(_ autohidesWindow: Bool) {
+    private func applyEffectiveVisibility(animated: Bool) {
         hideWorkItem?.cancel()
 
-        if autohidesWindow {
+        if effectivelyAutohides {
             let nextState: VisibilityState = shouldRemainVisible ? .visible : .hidden
-            setVisibility(nextState, animated: true)
+            setVisibility(nextState, animated: animated)
             return
         }
 
-        setVisibility(.visible, animated: true)
+        setVisibility(.visible, animated: animated)
     }
 
     private func scheduleHideIfNeeded() {
         hideWorkItem?.cancel()
 
-        guard preferences.autohidesWindow, !shouldRemainVisible else { return }
+        guard effectivelyAutohides, !shouldRemainVisible else { return }
 
         let workItem = DispatchWorkItem { [weak self] in
             guard let self, !self.shouldRemainVisible else { return }
@@ -370,6 +433,11 @@ final class MainWindow: NSWindow {
     }
 
     private func setVisibility(_ state: VisibilityState, animated: Bool) {
+        if state == .visible {
+            fullscreenRevealWorkItem?.cancel()
+            fullscreenRevealWorkItem = nil
+        }
+
         guard visibilityState != state else {
             applyCurrentFrame(animated: false)
             return
@@ -656,5 +724,72 @@ final class MainWindow: NSWindow {
                 ?? NSScreen.main
                 ?? NSScreen.screens.first
         }
+    }
+
+    private func updateFullscreenStateAndApply(animated: Bool) {
+        let newValue = computeFullscreenStateOnTargetScreen()
+        guard newValue != isFullscreenActiveOnTargetScreen else { return }
+        isFullscreenActiveOnTargetScreen = newValue
+        applyEffectiveVisibility(animated: animated)
+    }
+
+    private func scheduleFullscreenRecheck() {
+        fullscreenRecheckWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.updateFullscreenStateAndApply(animated: true)
+        }
+        fullscreenRecheckWorkItem = workItem
+        // Long enough to cover the macOS fullscreen exit animation, which can
+        // run up to ~750 ms with reduce-motion off.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.85, execute: workItem)
+    }
+
+    private func computeFullscreenStateOnTargetScreen() -> Bool {
+        guard let targetFrame = targetScreen()?.frame,
+              let primaryScreenHeight = NSScreen.screens.first?.frame.height
+        else {
+            return false
+        }
+
+        let listOptions: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        guard let windows = CGWindowListCopyWindowInfo(listOptions, kCGNullWindowID) as? [[String: Any]] else {
+            return false
+        }
+
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+
+        for info in windows {
+            guard let layer = info[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
+
+            if let pidNumber = info[kCGWindowOwnerPID as String] as? NSNumber,
+               pidNumber.int32Value == ownPID {
+                continue
+            }
+
+            guard let boundsDict = info[kCGWindowBounds as String] as? NSDictionary,
+                  let cgBounds = CGRect(dictionaryRepresentation: boundsDict)
+            else { continue }
+
+            // CGWindow uses a flipped Y axis with origin at the top-left of the
+            // primary display; convert back to NSScreen space before comparing.
+            let nsBounds = CGRect(
+                x: cgBounds.minX,
+                y: primaryScreenHeight - cgBounds.maxY,
+                width: cgBounds.width,
+                height: cgBounds.height
+            )
+
+            // A genuine fullscreen window covers the entire NSScreen.frame
+            // (including the menubar area). Maximized windows only cover
+            // visibleFrame, so this distinguishes the two.
+            if abs(nsBounds.minX - targetFrame.minX) < 1,
+               abs(nsBounds.minY - targetFrame.minY) < 1,
+               abs(nsBounds.width - targetFrame.width) < 1,
+               abs(nsBounds.height - targetFrame.height) < 1 {
+                return true
+            }
+        }
+
+        return false
     }
 }
