@@ -14,6 +14,12 @@ final class WindowSwitcherOverlayWindowController: NSWindowController {
     private let preferences = DockyPreferences.shared
 
     private var showsOverlayUI: Bool {
+        // List layout always needs the overlay — it's the only thing the user
+        // sees, since there are no window thumbnails behind it.
+        if WindowSwitcherService.shared.resolvedLayout == .list {
+            return true
+        }
+
         guard ProductService.shared.isUnlocked(.windowSwitcher),
               preferences.showsWindowSwitcherFocusPreview,
               preferences.windowSwitcherPreviewMode == .instantFocus else {
@@ -125,6 +131,21 @@ final class WindowSwitcherOverlayWindowController: NSWindowController {
             self?.refreshOverlayPresentation()
         }
         .store(in: &cancellables)
+
+        preferences.$windowSwitcherLayout
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshOverlayPresentation()
+            }
+            .store(in: &cancellables)
+
+        PermissionsService.shared.$screenCapture
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshOverlayPresentation()
+            }
+            .store(in: &cancellables)
     }
 
     private func configureHiddenWindowState() {
@@ -188,10 +209,15 @@ private final class WindowSwitcherOverlayWindow: NSWindow {
 private struct WindowSwitcherOverlayView: View {
     @ObservedObject private var switcher = WindowSwitcherService.shared
     @ObservedObject private var preferences = DockyPreferences.shared
+    @ObservedObject private var permissions = PermissionsService.shared
 
     private let innerPreviewCornerRadius: CGFloat = 16
     private let cardPadding: CGFloat = 12
     private let containerPadding: CGFloat = 18
+    /// Inner padding between the chrome and its content. Same value for both
+    /// layouts so the formula `chrome - padding` produces consistent edge
+    /// radii across thumbnails and list.
+    private let interiorPadding: CGFloat = 8
 
     private var cardCornerRadius: CGFloat {
         innerPreviewCornerRadius + cardPadding
@@ -201,6 +227,22 @@ private struct WindowSwitcherOverlayView: View {
         cardCornerRadius + containerPadding
     }
 
+    /// Outer corner radius for cards/rows touching the chrome edge —
+    /// chrome radius minus the interior padding so curves run parallel.
+    private var edgeContentCornerRadius: CGFloat {
+        max(0, containerCornerRadius - interiorPadding)
+    }
+
+    /// Half the edge radius. Used for corners facing a neighbor card/row.
+    private var innerContentCornerRadius: CGFloat {
+        edgeContentCornerRadius / 2
+    }
+
+    private var resolvedLayout: WindowSwitcherLayout {
+        preferences.windowSwitcherLayout
+            .resolved(canCaptureThumbnails: permissions.screenCapture == .granted)
+    }
+
     var body: some View {
         #if DEBUG
         let _ = Self._printChanges()
@@ -208,49 +250,255 @@ private struct WindowSwitcherOverlayView: View {
 
         GeometryReader { proxy in
             ZStack {
-                Color.black.opacity(switcher.focusedPreview == nil ? 0 : 0.6)
-                    .ignoresSafeArea()
+                // Stretches the ZStack to the GeometryReader's proposed size so
+                // the centered child (cards or list) is centered against the
+                // full screen, not the child's own bounds.
+                Color.clear.ignoresSafeArea()
 
-                if let focusedPreview = switcher.focusedPreview {
-                    FocusedWindowPreviewView(
-                        preview: focusedPreview,
-                        containerSize: proxy.size
-                    )
-                    .allowsHitTesting(false)
-                    .transition(.opacity)
-                }
+                if resolvedLayout == .thumbnails {
+                    Color.black.opacity(switcher.focusedPreview == nil ? 0 : 0.6)
+                        .ignoresSafeArea()
 
-                ScrollViewReader { scrollProxy in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 18) {
-                            ForEach(switcher.windows) { window in
-                                WindowSwitcherCard(
-                                    window: window,
-                                    isSelected: window.windowIdentifier == switcher.selectedWindowIdentifier,
-                                    innerPreviewCornerRadius: innerPreviewCornerRadius,
-                                    cardCornerRadius: cardCornerRadius
-                                )
-                                .id(window.windowIdentifier)
-                            }
-                        }
-                        .padding(.horizontal, 28)
-                        .padding(.vertical, 28)
+                    if let focusedPreview = switcher.focusedPreview {
+                        FocusedWindowPreviewView(
+                            preview: focusedPreview,
+                            containerSize: proxy.size
+                        )
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
                     }
-                    .frame(maxWidth: max(0, proxy.size.width - 80))
-                    .fixedSize(horizontal: true, vertical: true)
-                    .background(.primary.opacity(0.18))
-                    .glassEffect(.regular, in: .rect(cornerRadius: containerCornerRadius, style: .continuous))
-                    .clipShape(RoundedRectangle(cornerRadius: containerCornerRadius, style: .continuous))
-                    .onChange(of: switcher.selectedWindowIdentifier) { _, selection in
-                        guard let selection else { return }
-                        withAnimation(.easeInOut(duration: 0.14)) {
-                            scrollProxy.scrollTo(selection, anchor: .center)
-                        }
-                    }
+
+                    thumbnailLayout(containerSize: proxy.size)
+                } else {
+                    listLayout
                 }
             }
             .animation(.easeInOut(duration: 0.18), value: switcher.focusedPreview?.windowIdentifier)
         }
+    }
+
+    private func thumbnailLayout(containerSize: CGSize) -> some View {
+        ScrollViewReader { scrollProxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 18) {
+                    ForEach(Array(switcher.windows.enumerated()), id: \.element.id) { index, window in
+                        let total = switcher.windows.count
+                        let isFirst = index == 0
+                        let isLast = index == total - 1
+                        // Mirror of the list layout, rotated 90°: leading
+                        // corners hug chrome on the first card, trailing on
+                        // the last card; corners facing a neighbor get the
+                        // inner radius.
+                        let leadingRadius = isFirst ? edgeContentCornerRadius : innerContentCornerRadius
+                        let trailingRadius = isLast ? edgeContentCornerRadius : innerContentCornerRadius
+                        WindowSwitcherCard(
+                            window: window,
+                            isSelected: window.windowIdentifier == switcher.selectedWindowIdentifier,
+                            innerPreviewCornerRadius: innerPreviewCornerRadius,
+                            leadingCornerRadius: leadingRadius,
+                            trailingCornerRadius: trailingRadius
+                        )
+                        .id(window.windowIdentifier)
+                    }
+                }
+                .padding(interiorPadding)
+            }
+            .frame(maxWidth: max(0, containerSize.width - 80))
+            .fixedSize(horizontal: true, vertical: true)
+            .background(.primary.opacity(0.18))
+            .glassEffect(.regular, in: .rect(cornerRadius: containerCornerRadius, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: containerCornerRadius, style: .continuous))
+            .onChange(of: switcher.selectedWindowIdentifier) { _, selection in
+                guard let selection else { return }
+                withAnimation(.easeInOut(duration: 0.14)) {
+                    scrollProxy.scrollTo(selection, anchor: .center)
+                }
+            }
+        }
+    }
+
+    private var listLayout: some View {
+        // List chrome is tighter than thumbnail mode — the container is
+        // text-only so a small radius reads cleaner than the chunky 46pt
+        // used for the thumbnail card stack.
+        WindowSwitcherListView(cornerRadius: 16, interiorPadding: interiorPadding)
+    }
+}
+
+private struct WindowSwitcherListView: View {
+    let cornerRadius: CGFloat
+    let interiorPadding: CGFloat
+
+    @ObservedObject private var switcher = WindowSwitcherService.shared
+
+    private let listWidth: CGFloat = 360
+    private let rowHeight: CGFloat = 52
+    private let maxVisibleRows: Int = 8
+
+    /// First and last rows hug the container chrome — their radius is the
+    /// container's radius minus our inner padding, so the row's outer edge
+    /// runs parallel to the container edge.
+    private var edgeRowCornerRadius: CGFloat {
+        max(0, cornerRadius - interiorPadding)
+    }
+
+    /// Middle rows step the radius down — half the edge radius — so
+    /// in-list selection highlights look like rows, not detached pills.
+    private var innerRowCornerRadius: CGFloat {
+        edgeRowCornerRadius / 2
+    }
+
+    var body: some View {
+        ScrollViewReader { scrollProxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(spacing: 2) {
+                    ForEach(Array(switcher.windows.enumerated()), id: \.element.id) { index, window in
+                        let total = switcher.windows.count
+                        let isFirst = index == 0
+                        let isLast = index == total - 1
+                        // Outer edge (top of first row, bottom of last row)
+                        // hugs the chrome; the inner edge — facing a neighbor
+                        // row — uses the half radius for visual continuity.
+                        let topRadius = isFirst ? edgeRowCornerRadius : innerRowCornerRadius
+                        let bottomRadius = isLast ? edgeRowCornerRadius : innerRowCornerRadius
+                        WindowSwitcherListRow(
+                            window: window,
+                            isSelected: window.windowIdentifier == switcher.selectedWindowIdentifier,
+                            height: rowHeight,
+                            topCornerRadius: topRadius,
+                            bottomCornerRadius: bottomRadius
+                        )
+                        .id(window.windowIdentifier)
+                    }
+                }
+                .padding(interiorPadding)
+            }
+            .frame(width: listWidth)
+            .frame(maxHeight: CGFloat(maxVisibleRows) * rowHeight + 16)
+            .fixedSize(horizontal: true, vertical: true)
+            .background(.primary.opacity(0.18))
+            .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .onChange(of: switcher.selectedWindowIdentifier) { _, selection in
+                guard let selection else { return }
+                withAnimation(.easeInOut(duration: 0.14)) {
+                    scrollProxy.scrollTo(selection, anchor: .center)
+                }
+            }
+        }
+    }
+}
+
+private struct WindowSwitcherListRow: View {
+    let window: AppWindow
+    let isSelected: Bool
+    let height: CGFloat
+    let topCornerRadius: CGFloat
+    let bottomCornerRadius: CGFloat
+
+    @ObservedObject private var switcher = WindowSwitcherService.shared
+    @ObservedObject private var workspace = WorkspaceService.shared
+
+    private let iconSize: CGFloat = 28
+
+    private var rowShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            cornerRadii: RectangleCornerRadii(
+                topLeading: topCornerRadius,
+                bottomLeading: bottomCornerRadius,
+                bottomTrailing: bottomCornerRadius,
+                topTrailing: topCornerRadius
+            ),
+            style: .continuous
+        )
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(nsImage: IconCacheService.shared.icon(forBundleIdentifier: window.bundleIdentifier))
+                .resizable()
+                .interpolation(.high)
+                .frame(width: iconSize, height: iconSize)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(window.windowTitle)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary.opacity(isSelected ? 1 : 0.85))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                Text(window.appDisplayName)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.primary.opacity(isSelected ? 0.75 : 0.5))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if window.isMinimized {
+                Image(systemName: "minus.rectangle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.primary.opacity(0.55))
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(height: height)
+        .background {
+            rowShape
+                .fill(isSelected ? .white.opacity(0.16) : .clear)
+                .overlay {
+                    rowShape
+                        .strokeBorder(isSelected ? .white.opacity(0.28) : .clear, lineWidth: 1)
+                }
+        }
+        .background {
+            ContextActionMenuPresenter(
+                actionProvider: contextActions(modifierFlags:),
+                onPresentationChanged: switcher.setContextMenuPresented
+            )
+        }
+        .contentShape(rowShape)
+        .onHover { isHovering in
+            if isHovering {
+                switcher.selectWindow(withIdentifier: window.windowIdentifier)
+            }
+        }
+        .animation(.easeInOut(duration: 0.12), value: isSelected)
+    }
+
+    private func contextActions(modifierFlags: NSEvent.ModifierFlags) -> [ContextAction] {
+        guard ProductService.shared.isUnlocked(.windowSwitcher) else {
+            return []
+        }
+
+        return [
+            .action("Focus Window") {
+                switcher.dismiss()
+                _ = workspace.focus(window: window)
+            },
+            .action("Minimize Window") {
+                switcher.dismiss()
+                _ = workspace.minimize(window: window)
+            },
+            .action("Close Window", isDestructive: true) {
+                if workspace.close(window: window) {
+                    switcher.removeWindow(withIdentifier: window.windowIdentifier)
+                }
+            },
+            .divider,
+            .action("Focus App") {
+                switcher.dismiss()
+                workspace.focusApplication(bundleIdentifier: window.bundleIdentifier)
+            },
+            .action("Hide App") {
+                switcher.dismiss()
+                workspace.hide(bundleIdentifier: window.bundleIdentifier)
+            },
+            .action("Quit") {
+                switcher.dismiss()
+                workspace.quit(bundleIdentifier: window.bundleIdentifier)
+            }
+        ]
     }
 }
 
@@ -287,12 +535,25 @@ private struct WindowSwitcherCard: View {
     let window: AppWindow
     let isSelected: Bool
     let innerPreviewCornerRadius: CGFloat
-    let cardCornerRadius: CGFloat
+    let leadingCornerRadius: CGFloat
+    let trailingCornerRadius: CGFloat
     @ObservedObject private var switcher = WindowSwitcherService.shared
     @ObservedObject private var workspace = WorkspaceService.shared
 
     private let previewWidth: CGFloat = 180
     private let previewHeight: CGFloat = 102
+
+    private var cardShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            cornerRadii: RectangleCornerRadii(
+                topLeading: leadingCornerRadius,
+                bottomLeading: leadingCornerRadius,
+                bottomTrailing: trailingCornerRadius,
+                topTrailing: trailingCornerRadius
+            ),
+            style: .continuous
+        )
+    }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -317,10 +578,10 @@ private struct WindowSwitcherCard: View {
         }
         .padding(12)
         .background {
-            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+            cardShape
                 .fill(isSelected ? .white.opacity(0.14) : .white.opacity(0.0))
                 .overlay {
-                    RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+                    cardShape
                         .strokeBorder(isSelected ? .white.opacity(0.28) : .white.opacity(0.0), lineWidth: 1)
                 }
         }
@@ -330,7 +591,7 @@ private struct WindowSwitcherCard: View {
                 onPresentationChanged: switcher.setContextMenuPresented
             )
         }
-        .contentShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
+        .contentShape(cardShape)
         .onHover { isHovering in
             if isHovering {
                 switcher.selectWindow(withIdentifier: window.windowIdentifier)

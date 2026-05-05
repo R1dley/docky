@@ -64,6 +64,7 @@ struct AppWindow: Identifiable, Hashable {
     nonisolated let windowTitle: String
     nonisolated let isMinimized: Bool
     nonisolated let windowNumber: Int?
+    nonisolated let cgWindowID: CGWindowID?
     nonisolated let frame: CGRect?
 
     nonisolated var id: WindowID { WindowID(element: element) }
@@ -82,6 +83,7 @@ struct AppWindow: Identifiable, Hashable {
             && lhs.windowTitle == rhs.windowTitle
             && lhs.isMinimized == rhs.isMinimized
             && lhs.windowNumber == rhs.windowNumber
+            && lhs.cgWindowID == rhs.cgWindowID
             && lhs.frame == rhs.frame
     }
 
@@ -149,18 +151,20 @@ final class WindowRegistry: ObservableObject {
     }
 
     func windowsByRecency(forBundleIdentifier bundleIdentifier: String) -> [AppWindow] {
-        // Observation order is the closest stand-in for recency we have
-        // without a focus-history channel; later entries are the most
-        // recently-touched windows for that app.
+        // The registry's `windows` array is maintained in MRU order: app
+        // activation/focus changes bump the app's block to the front (see
+        // `bumpAppToTop`), so within an app the first match is the most
+        // recently focused window.
         windows(forBundleIdentifier: bundleIdentifier)
     }
 
     // MARK: - Window operations
 
-    /// Brings `window` to the front. Uses the cached `AXUIElement` so the
-    /// raise targets exactly the picked window (or fails cleanly if it has
-    /// been destroyed). The app activate is dispatched to the next main-run
-    /// turn so it doesn't reorder windows before the raise lands.
+    /// Brings `window` to the front. Prefers the SLPS path (private SkyLight)
+    /// because it targets a specific CGWindowID — only the picked window comes
+    /// forward, instead of every window of the app. Falls back to AX-raise +
+    /// `NSRunningApplication.activate()` when no CGWindowID is available
+    /// (rare; see `WindowRegistry.cgWindowID`) or when SLPS is unavailable.
     @discardableResult
     func focus(_ window: AppWindow) -> Bool {
         guard PermissionsService.shared.accessibility == .granted else {
@@ -181,6 +185,20 @@ final class WindowRegistry: ObservableObject {
             restored = true
         }
 
+        if let cgWindowID = window.cgWindowID,
+           focusViaSLPS(pid: window.processIdentifier, cgWindowID: cgWindowID, element: element) {
+            // SLPS doesn't unhide the app process itself; if it was hidden,
+            // surface it now so its windows can actually display.
+            if let runningApp = NSRunningApplication(processIdentifier: window.processIdentifier),
+               runningApp.isHidden {
+                runningApp.unhide()
+            }
+            return restored
+        }
+
+        // Legacy fallback: raise via AX, then activate the whole app. This
+        // brings every window of the app forward — what we're trying to avoid
+        // — but it's the only thing that works when CGWindowID lookup fails.
         let raised = AXUIElementPerformAction(element, kAXRaiseAction as CFString) == .success
 
         if let runningApp = NSRunningApplication(processIdentifier: window.processIdentifier) {
@@ -191,6 +209,26 @@ final class WindowRegistry: ObservableObject {
         }
 
         return restored && raised
+    }
+
+    private func focusViaSLPS(pid: pid_t, cgWindowID: CGWindowID, element: AXUIElement) -> Bool {
+        var psn = ProcessSerialNumber()
+        guard GetProcessForPID(pid, &psn) == noErr else { return false }
+
+        let result = _SLPSSetFrontProcessWithOptions(&psn, cgWindowID, SLPSMode.userGenerated.rawValue)
+        guard result == .success else { return false }
+
+        // Synthetic event handshake — without this the window comes up but
+        // keyboard input still routes to the previous app.
+        slpsMakeKeyWindow(psn: &psn, windowID: cgWindowID)
+
+        // Best-effort: AX raise to confirm Z-order in AX, and mark as main so
+        // the app's "main window changed" hooks fire. Failures here don't
+        // unwind — the SLPS call already brought the window front.
+        _ = AXUIElementPerformAction(element, kAXRaiseAction as CFString)
+        _ = AXUIElementSetAttributeValue(element, kAXMainWindowAttribute as CFString, kCFBooleanTrue)
+
+        return true
     }
 
     @discardableResult
@@ -422,13 +460,20 @@ final class WindowRegistry: ObservableObject {
         let name = notificationName as String
 
         switch name {
-        case kAXWindowCreatedNotification,
-             kAXWindowMiniaturizedNotification,
-             kAXWindowDeminiaturizedNotification,
-             kAXApplicationActivatedNotification,
+        case kAXApplicationActivatedNotification,
              kAXApplicationShownNotification,
              kAXFocusedWindowChangedNotification,
              kAXMainWindowChangedNotification:
+            // MRU: activation and focus changes bump the app's window block
+            // to the front of the list, with AX's Z-order (focused first)
+            // applied within the block.
+            bumpAppToTop(pid: pid)
+
+        case kAXWindowCreatedNotification,
+             kAXWindowMiniaturizedNotification,
+             kAXWindowDeminiaturizedNotification:
+            // These can fire for background apps (e.g., "open in new window"
+            // from a notification). Don't bump — just refresh in place.
             syncWindows(for: pid)
 
         case kAXWindowMovedNotification, kAXWindowResizedNotification:
@@ -467,6 +512,34 @@ final class WindowRegistry: ObservableObject {
 
         let updated = enumerateWindows(for: app)
         replaceWindows(forPID: pid, with: updated)
+    }
+
+    /// Moves an app's window block to the front of the registry, using AX's
+    /// own Z-order (focused first) for the block's internal order. Bypasses
+    /// `applyOrdered`, which deliberately preserves existing order — so this
+    /// is the only mutation path that actually changes ordering.
+    private func bumpAppToTop(pid: pid_t) {
+        guard let app = NSRunningApplication(processIdentifier: pid),
+              app.activationPolicy == .regular else {
+            removeWindows(for: pid)
+            return
+        }
+
+        let updated = enumerateWindows(for: app)
+        guard !updated.isEmpty else {
+            // No tracked windows for this app — drop any stale entries but
+            // don't reorder anything else.
+            if windows.contains(where: { $0.processIdentifier == pid }) {
+                windows.removeAll { $0.processIdentifier == pid }
+            }
+            return
+        }
+
+        var next = windows.filter { $0.processIdentifier != pid }
+        next.insert(contentsOf: updated, at: 0)
+        if next != windows {
+            windows = next
+        }
     }
 
     private func enumerateWindows(for app: NSRunningApplication) -> [AppWindow] {
@@ -519,6 +592,7 @@ final class WindowRegistry: ObservableObject {
         let resolvedTitle = (title?.isEmpty ?? true) ? appDisplayName : (title ?? appDisplayName)
         let isMinimized = boolAttribute(kAXMinimizedAttribute as CFString, of: element) ?? false
         let windowNumber = intAttribute(axWindowNumberAttribute, of: element)
+        let cgWindowID = cgWindowID(of: element)
         let frame = frameAttribute(of: element)
 
         return AppWindow(
@@ -529,6 +603,7 @@ final class WindowRegistry: ObservableObject {
             windowTitle: resolvedTitle,
             isMinimized: isMinimized,
             windowNumber: windowNumber,
+            cgWindowID: cgWindowID,
             frame: frame
         )
     }
@@ -576,6 +651,7 @@ final class WindowRegistry: ObservableObject {
             windowTitle: existing.windowTitle,
             isMinimized: existing.isMinimized,
             windowNumber: existing.windowNumber,
+            cgWindowID: existing.cgWindowID,
             frame: newFrame
         )
     }
@@ -602,6 +678,7 @@ final class WindowRegistry: ObservableObject {
             windowTitle: resolvedTitle,
             isMinimized: existing.isMinimized,
             windowNumber: existing.windowNumber,
+            cgWindowID: existing.cgWindowID,
             frame: existing.frame
         )
     }
@@ -655,6 +732,12 @@ final class WindowRegistry: ObservableObject {
             return nil
         }
         return (value as? NSNumber)?.intValue
+    }
+
+    private func cgWindowID(of element: AXUIElement) -> CGWindowID? {
+        var id: CGWindowID = 0
+        guard _AXUIElementGetWindow(element, &id) == .success, id != 0 else { return nil }
+        return id
     }
 
     private func frameAttribute(of element: AXUIElement) -> CGRect? {

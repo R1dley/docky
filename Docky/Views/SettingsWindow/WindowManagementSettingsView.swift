@@ -8,12 +8,25 @@ import SwiftUI
 struct WindowManagementSettingsView: View {
     @ObservedObject private var preferences = DockyPreferences.shared
     @ObservedObject private var product = ProductService.shared
+    @ObservedObject private var permissions = PermissionsService.shared
     @State private var isRecordingShortcut = false
+
+    private var resolvedLayout: WindowSwitcherLayout {
+        preferences.windowSwitcherLayout
+            .resolved(canCaptureThumbnails: permissions.screenCapture == .granted)
+    }
+
+    private var previewControlsApply: Bool {
+        // Preview modes (in-place / instant-focus) only do anything in the
+        // thumbnail layout. In list mode the list is the preview substitute.
+        resolvedLayout == .thumbnails
+    }
 
     private var shortcutHelpText: String {
         if product.isUnlocked(.windowSwitcher),
            preferences.showsWindowSwitcherFocusPreview,
-           preferences.windowSwitcherPreviewMode == .instantFocus {
+           preferences.windowSwitcherPreviewMode == .instantFocus,
+           previewControlsApply {
             return "While the switcher is open, keep the shortcut modifiers held and tap the shortcut again to cycle. In Instant Focus mode, each step immediately focuses the next window and releasing the modifiers ends cycling."
         }
 
@@ -69,11 +82,39 @@ struct WindowManagementSettingsView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
+                    Text("Layout")
+                        .font(.headline)
+
+                    Picker("Layout", selection: $preferences.windowSwitcherLayout) {
+                        ForEach(WindowSwitcherLayout.allCases) { layout in
+                            Text(layout.title).tag(layout)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .disabled(!preferences.enablesWindowSwitcher)
+
+                    Text(preferences.windowSwitcherLayout.summary)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if preferences.windowSwitcherLayout == .auto, permissions.screenCapture != .granted {
+                        Text("Auto is using the list right now because Screen Recording permission isn't granted.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.vertical, 4)
+
+                VStack(alignment: .leading, spacing: 8) {
                     Toggle("Enable Switcher Preview", isOn: $preferences.showsWindowSwitcherFocusPreview)
                         .font(.headline)
-                        .disabled(!product.isUnlocked(.windowSwitcher) || !preferences.enablesWindowSwitcher)
+                        .disabled(!product.isUnlocked(.windowSwitcher) || !preferences.enablesWindowSwitcher || !previewControlsApply)
 
-                    Text("Choose whether the switcher should stay purely overlaid, preview the selected window behind it, or focus each step immediately while cycling.")
+                    Text(previewControlsApply
+                         ? "Choose whether the switcher should stay purely overlaid, preview the selected window behind it, or focus each step immediately while cycling."
+                         : "Preview modes only apply to the Thumbnails layout. The List layout uses the row list itself as the preview.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -90,7 +131,7 @@ struct WindowManagementSettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    .disabled(!product.isUnlocked(.windowSwitcher) || !preferences.enablesWindowSwitcher || !preferences.showsWindowSwitcherFocusPreview)
+                    .disabled(!product.isUnlocked(.windowSwitcher) || !preferences.enablesWindowSwitcher || !preferences.showsWindowSwitcherFocusPreview || !previewControlsApply)
 
                     Text(preferences.windowSwitcherPreviewMode.summary)
                         .foregroundStyle(.secondary)

@@ -190,11 +190,11 @@ final class WorkspaceService: ObservableObject {
             return appWindowPreviews[window.windowIdentifier]
         }
 
-        if let windowNumber = window.windowNumber,
+        if let cgWindowID = window.cgWindowID,
            let cgImage = CGWindowListCreateImagePrivate(
                .null,
                [.optionIncludingWindow],
-               CGWindowID(windowNumber),
+               cgWindowID,
                [.boundsIgnoreFraming, .bestResolution]
            ) {
             return makeFullSizeImage(from: cgImage)

@@ -34,9 +34,19 @@ final class WindowSwitcherService: ObservableObject {
     private let reverseHotKeyID = EventHotKeyID(signature: OSType(0x444B5957), id: 2)
     private var reverseHotKeyRef: EventHotKeyRef?
 
+    var resolvedLayout: WindowSwitcherLayout {
+        let canCapture = PermissionsService.shared.screenCapture == .granted
+        return DockyPreferences.shared.windowSwitcherLayout.resolved(canCaptureThumbnails: canCapture)
+    }
+
     private var activePreviewMode: WindowSwitcherPreviewMode? {
+        // Both preview modes are thumbnail-mode features: in-place needs the
+        // captured image to show behind the switcher, and instant-focus's
+        // "see the real window come forward" UX fights with the list overlay.
+        // In list mode the list itself is the preview substitute.
         guard ProductService.shared.isUnlocked(.windowSwitcher),
-              DockyPreferences.shared.showsWindowSwitcherFocusPreview else {
+              DockyPreferences.shared.showsWindowSwitcherFocusPreview,
+              resolvedLayout == .thumbnails else {
             return nil
         }
 
@@ -241,6 +251,21 @@ final class WindowSwitcherService: ObservableObject {
                 guard let self else { return }
 
                 self.refreshSelectionPresentation()
+            }
+            .store(in: &cancellables)
+
+        DockyPreferences.shared.$windowSwitcherLayout
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshSelectionPresentation()
+            }
+            .store(in: &cancellables)
+
+        PermissionsService.shared.$screenCapture
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshSelectionPresentation()
             }
             .store(in: &cancellables)
 
