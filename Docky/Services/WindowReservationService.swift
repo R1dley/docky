@@ -27,9 +27,12 @@ final class WindowReservationService {
 
     private var cancellables: Set<AnyCancellable> = []
     private var registrySubscription: AnyCancellable?
-    private var pidCooldowns: [pid_t: Date] = [:]
+    private var windowCooldowns: [WindowID: Date] = [:]
     private let cooldownInterval: TimeInterval = 0.25
     private let matchTolerance: CGFloat = 1
+    private let edgeTolerance: CGFloat = 2
+
+    private enum DockSide { case top, bottom, left, right }
 
     private init() {}
 
@@ -63,43 +66,67 @@ final class WindowReservationService {
     private func detach() {
         registrySubscription?.cancel()
         registrySubscription = nil
-        pidCooldowns.removeAll()
+        windowCooldowns.removeAll()
     }
 
     private func scan(windows: [AppWindow]) {
         guard let mainWindow = NSApp.windows.compactMap({ $0 as? MainWindow }).first,
               let dockyScreen = mainWindow.screen,
-              let dockyFrame = mainWindow.currentReservationFrame
+              let dockyFrame = mainWindow.currentReservationFrame,
+              let primaryScreenHeight = NSScreen.screens.first?.frame.height
         else { return }
+
+        let visibleFrame = dockyScreen.visibleFrame
+        guard let dockySide = side(of: dockyFrame, on: visibleFrame) else { return }
 
         let ownPID = ProcessInfo.processInfo.processIdentifier
         let now = Date()
 
         for window in windows where window.processIdentifier != ownPID {
-            if let until = pidCooldowns[window.processIdentifier], now < until { continue }
+            if let until = windowCooldowns[window.id], now < until { continue }
 
-            guard let frame = window.frame else { continue }
+            guard let axFrame = window.frame else { continue }
+            // WindowRegistry returns AX-space frames (flipped Y, origin at the
+            // top-left of the primary display). Convert to NSScreen space
+            // before any geometry comparison.
+            let nsFrame = flipY(axFrame, primaryHeight: primaryScreenHeight)
 
             // Only act on windows on the same screen as Docky.
-            guard let windowScreen = screenContaining(frame), windowScreen == dockyScreen else { continue }
+            guard let windowScreen = screenContaining(nsFrame), windowScreen == dockyScreen else { continue }
 
-            // Maximize signature: matches visibleFrame within tolerance.
-            // Skip fullscreen (matches frame, larger than visibleFrame) — that's
-            // a user-chosen state we never override.
-            guard rectsMatch(frame, dockyScreen.visibleFrame) else { continue }
+            // Tile/maximize signature: window intersects Docky AND is anchored
+            // to ≥2 edges of the visible frame. This catches full maximize (4
+            // flush edges), half tiles (3), and quarter tiles (2) without
+            // resizing free-floating windows that happen to overlap Docky.
+            guard nsFrame.intersects(dockyFrame) else { continue }
+            guard flushEdgeCount(of: nsFrame, against: visibleFrame) >= 2 else { continue }
 
-            // Compute the desired smaller frame.
-            let target = subtract(reservation: dockyFrame, from: dockyScreen.visibleFrame)
+            // Push the window off Docky's strip.
+            let nsTarget = pushAway(nsFrame, from: dockyFrame, on: dockySide)
             // Don't issue redundant resizes.
-            guard !rectsMatch(frame, target) else { continue }
-            // Don't shrink a window that's already smaller in the relevant axis.
-            guard target.width > 0, target.height > 0 else { continue }
+            guard !rectsMatch(nsFrame, nsTarget) else { continue }
+            // Don't shrink a window that has nothing left in the relevant axis.
+            guard nsTarget.width > 0, nsTarget.height > 0 else { continue }
 
-            let succeeded = registry.resize(window, to: target)
+            // AX setters take flipped-Y coordinates; convert before applying.
+            let axTarget = flipY(nsTarget, primaryHeight: primaryScreenHeight)
+            let succeeded = registry.resize(window, to: axTarget)
             if succeeded {
-                pidCooldowns[window.processIdentifier] = now.addingTimeInterval(cooldownInterval)
+                windowCooldowns[window.id] = now.addingTimeInterval(cooldownInterval)
             }
         }
+    }
+
+    /// Flips a rect between AX (top-left origin, Y grows down) and NSScreen
+    /// (bottom-left origin, Y grows up) coordinate spaces. The transform is
+    /// its own inverse.
+    private func flipY(_ rect: CGRect, primaryHeight: CGFloat) -> CGRect {
+        CGRect(
+            x: rect.minX,
+            y: primaryHeight - rect.maxY,
+            width: rect.width,
+            height: rect.height
+        )
     }
 
     private func screenContaining(_ frame: CGRect) -> NSScreen? {
@@ -116,28 +143,60 @@ final class WindowReservationService {
         return best?.screen
     }
 
-    /// Subtracts Docky's footprint from the screen's visible frame, picking
-    /// the side based on which edge Docky's frame is flush against.
-    private func subtract(reservation dock: CGRect, from visible: CGRect) -> CGRect {
-        var result = visible
-        let edgeTolerance: CGFloat = 2
-
+    /// Identifies which edge of the visible frame Docky is flush against.
+    /// Returns nil when Docky isn't anchored to any edge (corner-floating or
+    /// inset by more than the edge tolerance), in which case there's no clean
+    /// reservation strip to subtract.
+    private func side(of dock: CGRect, on visible: CGRect) -> DockSide? {
         if abs(dock.minX - visible.minX) < edgeTolerance, dock.maxX < visible.maxX - edgeTolerance {
-            // Docky on the left.
-            result.origin.x = dock.maxX
-            result.size.width = max(0, visible.maxX - dock.maxX)
-        } else if abs(dock.maxX - visible.maxX) < edgeTolerance, dock.minX > visible.minX + edgeTolerance {
-            // Docky on the right.
-            result.size.width = max(0, dock.minX - visible.minX)
-        } else if abs(dock.maxY - visible.maxY) < edgeTolerance, dock.minY > visible.minY + edgeTolerance {
-            // Docky at the top.
-            result.size.height = max(0, dock.minY - visible.minY)
-        } else if abs(dock.minY - visible.minY) < edgeTolerance, dock.maxY < visible.maxY - edgeTolerance {
-            // Docky at the bottom.
-            result.origin.y = dock.maxY
-            result.size.height = max(0, visible.maxY - dock.maxY)
+            return .left
         }
+        if abs(dock.maxX - visible.maxX) < edgeTolerance, dock.minX > visible.minX + edgeTolerance {
+            return .right
+        }
+        if abs(dock.minY - visible.minY) < edgeTolerance, dock.maxY < visible.maxY - edgeTolerance {
+            return .bottom
+        }
+        if abs(dock.maxY - visible.maxY) < edgeTolerance, dock.minY > visible.minY + edgeTolerance {
+            return .top
+        }
+        return nil
+    }
 
+    /// Counts how many of `frame`'s edges sit flush against `visible`. macOS
+    /// tile and maximize states leave windows snapped to visible-frame edges,
+    /// so this is a cheap classifier for "the user committed this window to a
+    /// system-managed slot."
+    private func flushEdgeCount(of frame: CGRect, against visible: CGRect) -> Int {
+        var count = 0
+        if abs(frame.minX - visible.minX) < edgeTolerance { count += 1 }
+        if abs(frame.maxX - visible.maxX) < edgeTolerance { count += 1 }
+        if abs(frame.minY - visible.minY) < edgeTolerance { count += 1 }
+        if abs(frame.maxY - visible.maxY) < edgeTolerance { count += 1 }
+        return count
+    }
+
+    /// Shrinks `frame` so it no longer overlaps Docky, by advancing the side
+    /// of the frame that touches Docky's strip. Other edges are preserved so
+    /// half/quarter tiles keep their cross-axis anchoring.
+    private func pushAway(_ frame: CGRect, from dock: CGRect, on side: DockSide) -> CGRect {
+        var result = frame
+        switch side {
+        case .left:
+            let newMinX = max(frame.minX, dock.maxX)
+            result.origin.x = newMinX
+            result.size.width = max(0, frame.maxX - newMinX)
+        case .right:
+            let newMaxX = min(frame.maxX, dock.minX)
+            result.size.width = max(0, newMaxX - frame.minX)
+        case .bottom:
+            let newMinY = max(frame.minY, dock.maxY)
+            result.origin.y = newMinY
+            result.size.height = max(0, frame.maxY - newMinY)
+        case .top:
+            let newMaxY = min(frame.maxY, dock.minY)
+            result.size.height = max(0, newMaxY - frame.minY)
+        }
         return result
     }
 

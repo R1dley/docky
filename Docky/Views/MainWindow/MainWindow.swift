@@ -288,6 +288,17 @@ final class MainWindow: NSWindow {
                 self?.updatePointerScreenMonitoring()
             }
             .store(in: &cancellables)
+
+        // App-level activate/space changes don't fire when a window in the
+        // foreground app gets maximized or fullscreened, so piggy-back on the
+        // registry's AX resize/move signal. Debounce so a drag-resize doesn't
+        // hammer the overlap recomputation.
+        WindowRegistry.shared.$windows
+            .debounce(for: .milliseconds(80), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.updateFullscreenStateAndApply(animated: true)
+            }
+            .store(in: &cancellables)
     }
 
     private func observeVisibilityInputs() {
