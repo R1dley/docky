@@ -36,9 +36,9 @@ struct TileView: View {
     @State private var widgetExpansionTask: Task<Void, Never>?
     @State private var folderSnapshot: FolderContentsSnapshot = .loaded([])
     @State private var lastFolderPopoverDismissedAt: TimeInterval = 0
-    @State private var isPressed = false
     @State private var windowPreviewDelayTask: Task<Void, Never>?
     @ObservedObject private var windowPreview = WindowPreviewWindowController.shared
+    @ObservedObject private var tilePress = TilePressService.shared
 
     private static let finderBundleIdentifier = "com.apple.finder"
     private static let folderPopoverRetapGuardInterval: TimeInterval = 0.25
@@ -355,10 +355,11 @@ struct TileView: View {
     }
 
     /// Combined dim trigger for app icons: pressed (mouse-down before
-    /// release) or active drag-over target. Folders/widgets/etc. don't dim
-    /// — only `.app` tile content participates.
+    /// release, tracked by `TilePressService`'s NSEvent monitor) or active
+    /// drag-over target. Folders/widgets/etc. don't dim — only `.app`
+    /// content participates.
     private var appTileDimSignal: Bool {
-        isAppContent && (isPressed || isDocumentDropTarget)
+        isAppContent && (tilePress.pressedTileID == tile.id || isDocumentDropTarget)
     }
 
     private var tileBodyOpacity: Double {
@@ -425,21 +426,11 @@ struct TileView: View {
             .contentShape(Rectangle())
             .onHover(perform: updateHoverState)
             .onTapGesture(perform: handleTap)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        guard isAppContent, !isPressed else { return }
-                        isPressed = true
-                    }
-                    .onEnded { _ in
-                        guard isPressed else { return }
-                        isPressed = false
-                    }
-            )
             .onGeometryChange(for: CGRect.self) { proxy in
                 proxy.frame(in: .global)
             } action: { newFrame in
                 globalTileFrame = newFrame
+                TilePressService.shared.registerFrame(tileID: tile.id, globalFrame: newFrame)
             }
             .onChange(of: isHovering) { _, isHovering in
                 updateWidgetExpansionPresentation(isHovering: isHovering, sourceFrame: globalTileFrame)
@@ -458,6 +449,7 @@ struct TileView: View {
                 isAppFolderListMenuPresented = false
                 isContextMenuPresented = false
                 WindowPreviewWindowController.shared.dismiss(sourceTileID: tile.id)
+                TilePressService.shared.unregisterFrame(tileID: tile.id)
             }
             .onChange(of: isFolderPopoverPresented) { _, isPresented in
                 updateTooltipPresentation()

@@ -990,6 +990,10 @@ struct TileContainerView: View {
             draggedTileInitialFrame = tileFrames[tile.id]
             draggedPinnedTileDestinationIndex = isPinnedReorderable(tileID: tile.id) ? pinnedTileIDs.firstIndex(of: tile.id) : nil
             draggedTrailingTileDestinationIndex = isTrailingReorderable(tileID: tile.id) ? trailingTileIDs.firstIndex(of: tile.id) : nil
+            // Drag wins over hover/widget previews — they'd block the cursor
+            // and confuse the reorder animation otherwise.
+            WindowPreviewWindowController.shared.dismissCurrent()
+            WidgetExpansionWindowController.shared.dismiss(sourceTileID: tile.id)
             Self.logger.info(
                 "Drag started tile=\(tileLogDescription(tile), privacy: .public) pinnedSource=\(isPinnedReorderable(tileID: tile.id), privacy: .public) trailingSource=\(isTrailingReorderable(tileID: tile.id), privacy: .public) startPinnedIndex=\(optionalIndexDescription(draggedPinnedTileDestinationIndex), privacy: .public) startTrailingIndex=\(optionalIndexDescription(draggedTrailingTileDestinationIndex), privacy: .public)"
             )

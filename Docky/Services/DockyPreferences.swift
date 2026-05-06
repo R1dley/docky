@@ -1418,7 +1418,7 @@ final class DockyPreferences: ObservableObject {
         static let opensAtLogin = true
         static let autohideWindowDelay: TimeInterval = 0.5
         static let fullscreenRevealDelay: TimeInterval = 0.5
-        static let windowPreviewHoverDelay: TimeInterval = 0.45
+        static let windowPreviewHoverDelay: TimeInterval = 1.0
         static let maximizedWindowBehavior: MaximizedWindowBehavior = .ignore
         static let hidesSystemDock = true
         static let overflowBehavior: DockOverflowBehavior = .rescale
