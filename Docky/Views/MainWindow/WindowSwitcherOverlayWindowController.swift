@@ -471,15 +471,17 @@ private struct WindowSwitcherListRow: View {
             return []
         }
 
-        return [
+        let dismiss = { switcher.dismiss() }
+        var actions: [ContextAction] = [
             .action("Focus Window") {
-                switcher.dismiss()
+                dismiss()
                 _ = workspace.focus(window: window)
             },
-            .action("Minimize Window") {
-                switcher.dismiss()
-                _ = workspace.minimize(window: window)
-            },
+            .divider,
+        ]
+        actions.append(contentsOf: windowMenuContextActions(for: window, dismiss: dismiss))
+        actions.append(contentsOf: [
+            .divider,
             .action("Close Window", isDestructive: true) {
                 if workspace.close(window: window) {
                     switcher.removeWindow(withIdentifier: window.windowIdentifier)
@@ -487,18 +489,19 @@ private struct WindowSwitcherListRow: View {
             },
             .divider,
             .action("Focus App") {
-                switcher.dismiss()
+                dismiss()
                 workspace.focusApplication(bundleIdentifier: window.bundleIdentifier)
             },
             .action("Hide App") {
-                switcher.dismiss()
+                dismiss()
                 workspace.hide(bundleIdentifier: window.bundleIdentifier)
             },
             .action("Quit") {
-                switcher.dismiss()
+                dismiss()
                 workspace.quit(bundleIdentifier: window.bundleIdentifier)
-            }
-        ]
+            },
+        ])
+        return actions
     }
 }
 
@@ -622,15 +625,17 @@ private struct WindowSwitcherCard: View {
             return []
         }
 
-        return [
+        let dismiss = { switcher.dismiss() }
+        var actions: [ContextAction] = [
             .action("Focus Window") {
-                switcher.dismiss()
+                dismiss()
                 _ = workspace.focus(window: window)
             },
-            .action("Minimize Window") {
-                switcher.dismiss()
-                _ = workspace.minimize(window: window)
-            },
+            .divider,
+        ]
+        actions.append(contentsOf: windowMenuContextActions(for: window, dismiss: dismiss))
+        actions.append(contentsOf: [
+            .divider,
             .action("Close Window", isDestructive: true) {
                 if workspace.close(window: window) {
                     switcher.removeWindow(withIdentifier: window.windowIdentifier)
@@ -638,17 +643,18 @@ private struct WindowSwitcherCard: View {
             },
             .divider,
             .action("Focus App") {
-                switcher.dismiss()
+                dismiss()
                 workspace.focusApplication(bundleIdentifier: window.bundleIdentifier)
             },
             .action("Hide App") {
-                switcher.dismiss()
+                dismiss()
                 workspace.hide(bundleIdentifier: window.bundleIdentifier)
             },
             .action("Quit") {
-                switcher.dismiss()
+                dismiss()
                 workspace.quit(bundleIdentifier: window.bundleIdentifier)
-            }
-        ]
+            },
+        ])
+        return actions
     }
 }

@@ -279,6 +279,32 @@ final class WindowRegistry: ObservableObject {
         return closeViaButton(element)
     }
 
+    /// Presses the window's green zoom button via AX. Mirrors what the user
+    /// would get clicking the title-bar button or selecting Window > Zoom —
+    /// macOS handles the toggle between user-set size and visibleFrame fit.
+    @discardableResult
+    func zoom(_ window: AppWindow) -> Bool {
+        guard PermissionsService.shared.accessibility == .granted else {
+            PermissionsService.shared.presentPermissionAlert(for: .accessibility, actionTitle: "zoom app windows")
+            return false
+        }
+
+        guard let element = liveElement(for: window) else { return false }
+
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+                element,
+                kAXZoomButtonAttribute as CFString,
+                &value
+              ) == .success,
+              let value,
+              CFGetTypeID(value) == AXUIElementGetTypeID() else {
+            return false
+        }
+        let zoomButton = value as! AXUIElement
+        return AXUIElementPerformAction(zoomButton, kAXPressAction as CFString) == .success
+    }
+
     /// Resize-and-move via AX. No permission alert: callers (background
     /// services) want a silent failure when permission is missing.
     @discardableResult

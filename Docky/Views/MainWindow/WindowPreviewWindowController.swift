@@ -488,15 +488,17 @@ private struct WindowPreviewCard: View {
     }
 
     private func contextActions(modifierFlags: NSEvent.ModifierFlags) -> [ContextAction] {
-        [
+        let dismiss = { WindowPreviewWindowController.shared.dismissCurrent() }
+        var actions: [ContextAction] = [
             .action("Focus Window") {
-                WindowPreviewWindowController.shared.dismissCurrent()
+                dismiss()
                 _ = workspace.focus(window: window)
             },
-            .action("Minimize Window") {
-                WindowPreviewWindowController.shared.dismissCurrent()
-                _ = workspace.minimize(window: window)
-            },
+            .divider,
+        ]
+        actions.append(contentsOf: windowMenuContextActions(for: window, dismiss: dismiss))
+        actions.append(contentsOf: [
+            .divider,
             .action("Close Window", isDestructive: true) {
                 if workspace.close(window: window) {
                     preview.removeWindow(withIdentifier: window.windowIdentifier)
@@ -504,18 +506,19 @@ private struct WindowPreviewCard: View {
             },
             .divider,
             .action("Focus App") {
-                WindowPreviewWindowController.shared.dismissCurrent()
+                dismiss()
                 workspace.focusApplication(bundleIdentifier: window.bundleIdentifier)
             },
             .action("Hide App") {
-                WindowPreviewWindowController.shared.dismissCurrent()
+                dismiss()
                 workspace.hide(bundleIdentifier: window.bundleIdentifier)
             },
             .action("Quit") {
-                WindowPreviewWindowController.shared.dismissCurrent()
+                dismiss()
                 workspace.quit(bundleIdentifier: window.bundleIdentifier)
-            }
-        ]
+            },
+        ])
+        return actions
     }
 }
 
@@ -654,15 +657,17 @@ private struct WindowPreviewListRow: View {
     }
 
     private func contextActions(modifierFlags: NSEvent.ModifierFlags) -> [ContextAction] {
-        [
+        let dismiss = { WindowPreviewWindowController.shared.dismissCurrent() }
+        var actions: [ContextAction] = [
             .action("Focus Window") {
-                WindowPreviewWindowController.shared.dismissCurrent()
+                dismiss()
                 _ = workspace.focus(window: window)
             },
-            .action("Minimize Window") {
-                WindowPreviewWindowController.shared.dismissCurrent()
-                _ = workspace.minimize(window: window)
-            },
+            .divider,
+        ]
+        actions.append(contentsOf: windowMenuContextActions(for: window, dismiss: dismiss))
+        actions.append(contentsOf: [
+            .divider,
             .action("Close Window", isDestructive: true) {
                 if workspace.close(window: window) {
                     preview.removeWindow(withIdentifier: window.windowIdentifier)
@@ -670,17 +675,18 @@ private struct WindowPreviewListRow: View {
             },
             .divider,
             .action("Focus App") {
-                WindowPreviewWindowController.shared.dismissCurrent()
+                dismiss()
                 workspace.focusApplication(bundleIdentifier: window.bundleIdentifier)
             },
             .action("Hide App") {
-                WindowPreviewWindowController.shared.dismissCurrent()
+                dismiss()
                 workspace.hide(bundleIdentifier: window.bundleIdentifier)
             },
             .action("Quit") {
-                WindowPreviewWindowController.shared.dismissCurrent()
+                dismiss()
                 workspace.quit(bundleIdentifier: window.bundleIdentifier)
-            }
-        ]
+            },
+        ])
+        return actions
     }
 }

@@ -18,6 +18,10 @@ import CoreImage
 import CoreMedia
 import ScreenCaptureKit
 
+enum AppFolderTileLayout {
+    case leftRight, rightLeft, topBottom, bottomTop, quarters
+}
+
 struct RunningApp: Hashable, Identifiable {
     let bundleIdentifier: String
     let localizedName: String
@@ -272,6 +276,192 @@ final class WorkspaceService: ObservableObject {
     @discardableResult
     func close(window: AppWindow) -> Bool {
         WindowRegistry.shared.close(window)
+    }
+
+    // MARK: - Window geometry actions
+
+    @discardableResult
+    func zoom(window: AppWindow) -> Bool {
+        let ok = WindowRegistry.shared.zoom(window)
+        if ok { _ = focus(window: window) }
+        return ok
+    }
+
+    @discardableResult
+    func fill(window: AppWindow) -> Bool {
+        guard let screen = currentScreen(for: window) else { return false }
+        let ok = resize(window, toNSFrame: screen.visibleFrame)
+        if ok { _ = focus(window: window) }
+        return ok
+    }
+
+    @discardableResult
+    func center(window: AppWindow) -> Bool {
+        guard let screen = currentScreen(for: window),
+              let size = window.frame?.size, size.width > 0, size.height > 0 else {
+            return false
+        }
+        let v = screen.visibleFrame
+        let target = CGRect(
+            x: v.midX - size.width / 2,
+            y: v.midY - size.height / 2,
+            width: size.width,
+            height: size.height
+        )
+        let ok = resize(window, toNSFrame: target)
+        if ok { _ = focus(window: window) }
+        return ok
+    }
+
+    @discardableResult
+    func fillLeftHalf(window: AppWindow) -> Bool {
+        fillRect(of: window) { v in
+            CGRect(x: v.minX, y: v.minY, width: v.width / 2, height: v.height)
+        }
+    }
+
+    @discardableResult
+    func fillRightHalf(window: AppWindow) -> Bool {
+        fillRect(of: window) { v in
+            CGRect(x: v.midX, y: v.minY, width: v.width / 2, height: v.height)
+        }
+    }
+
+    @discardableResult
+    func fillTopHalf(window: AppWindow) -> Bool {
+        // NSScreen Y grows upward; "top half" sits at higher Y.
+        fillRect(of: window) { v in
+            CGRect(x: v.minX, y: v.midY, width: v.width, height: v.height / 2)
+        }
+    }
+
+    @discardableResult
+    func fillBottomHalf(window: AppWindow) -> Bool {
+        fillRect(of: window) { v in
+            CGRect(x: v.minX, y: v.minY, width: v.width, height: v.height / 2)
+        }
+    }
+
+    @discardableResult
+    func fillTopLeftQuarter(window: AppWindow) -> Bool {
+        fillRect(of: window) { v in
+            CGRect(x: v.minX, y: v.midY, width: v.width / 2, height: v.height / 2)
+        }
+    }
+
+    @discardableResult
+    func fillTopRightQuarter(window: AppWindow) -> Bool {
+        fillRect(of: window) { v in
+            CGRect(x: v.midX, y: v.midY, width: v.width / 2, height: v.height / 2)
+        }
+    }
+
+    @discardableResult
+    func fillBottomLeftQuarter(window: AppWindow) -> Bool {
+        fillRect(of: window) { v in
+            CGRect(x: v.minX, y: v.minY, width: v.width / 2, height: v.height / 2)
+        }
+    }
+
+    @discardableResult
+    func fillBottomRightQuarter(window: AppWindow) -> Bool {
+        fillRect(of: window) { v in
+            CGRect(x: v.midX, y: v.minY, width: v.width / 2, height: v.height / 2)
+        }
+    }
+
+    private func fillRect(of window: AppWindow, _ make: (CGRect) -> CGRect) -> Bool {
+        guard let screen = currentScreen(for: window) else { return false }
+        let ok = resize(window, toNSFrame: make(screen.visibleFrame))
+        if ok { _ = focus(window: window) }
+        return ok
+    }
+
+    /// Tiles up to four windows on the screen of the first window (the
+    /// "anchor"). Order matters: the first window in `windows` takes the
+    /// first-named position in the layout (e.g., for `.leftRight`, windows[0]
+    /// is the left half). Caller is expected to pass windows in the order
+    /// the user understands as "first" (typically WindowRegistry MRU).
+    @discardableResult
+    func tile(windows: [AppWindow], layout: AppFolderTileLayout) -> Bool {
+        guard windows.count >= 2,
+              let screen = currentScreen(for: windows[0]) else { return false }
+        let v = screen.visibleFrame
+        let leftHalf = CGRect(x: v.minX, y: v.minY, width: v.width / 2, height: v.height)
+        let rightHalf = CGRect(x: v.midX, y: v.minY, width: v.width / 2, height: v.height)
+        let topHalf = CGRect(x: v.minX, y: v.midY, width: v.width, height: v.height / 2)
+        let bottomHalf = CGRect(x: v.minX, y: v.minY, width: v.width, height: v.height / 2)
+        let quarters: [CGRect] = [
+            CGRect(x: v.minX, y: v.midY, width: v.width / 2, height: v.height / 2), // TL
+            CGRect(x: v.midX, y: v.midY, width: v.width / 2, height: v.height / 2), // TR
+            CGRect(x: v.minX, y: v.minY, width: v.width / 2, height: v.height / 2), // BL
+            CGRect(x: v.midX, y: v.minY, width: v.width / 2, height: v.height / 2), // BR
+        ]
+
+        let placements: [(AppWindow, CGRect)]
+        switch layout {
+        case .leftRight:
+            placements = [(windows[0], leftHalf), (windows[1], rightHalf)]
+        case .rightLeft:
+            placements = [(windows[0], rightHalf), (windows[1], leftHalf)]
+        case .topBottom:
+            placements = [(windows[0], topHalf), (windows[1], bottomHalf)]
+        case .bottomTop:
+            placements = [(windows[0], bottomHalf), (windows[1], topHalf)]
+        case .quarters:
+            let n = min(windows.count, 4)
+            placements = (0..<n).map { (windows[$0], quarters[$0]) }
+        }
+
+        var allOk = true
+        for (window, frame) in placements {
+            allOk = resize(window, toNSFrame: frame) && allOk
+        }
+        // Surface every tiled window — windows on inactive Spaces won't be
+        // visible after resize until SLPS pulls them forward. Focus in order
+        // so the first-in-the-layout-name window ends up frontmost / key.
+        for (window, _) in placements.reversed() {
+            _ = focus(window: window)
+        }
+        return allOk
+    }
+
+    /// Routes an NSScreen-space target rect through the AX-space (Y-flipped
+    /// against the primary display) coordinates that `WindowRegistry.resize`
+    /// expects. Same flip used by `WindowReservationService`.
+    private func resize(_ window: AppWindow, toNSFrame nsFrame: CGRect) -> Bool {
+        guard let primaryHeight = NSScreen.screens.first?.frame.height else { return false }
+        let axFrame = CGRect(
+            x: nsFrame.minX,
+            y: primaryHeight - nsFrame.maxY,
+            width: nsFrame.width,
+            height: nsFrame.height
+        )
+        return WindowRegistry.shared.resize(window, to: axFrame)
+    }
+
+    /// Picks the NSScreen the window mostly occupies. Falls back to the main
+    /// screen when AX has no frame for the window (some apps return zero).
+    private func currentScreen(for window: AppWindow) -> NSScreen? {
+        guard let axFrame = window.frame,
+              let primaryHeight = NSScreen.screens.first?.frame.height else {
+            return NSScreen.main
+        }
+        let nsFrame = CGRect(
+            x: axFrame.minX,
+            y: primaryHeight - axFrame.maxY,
+            width: axFrame.width,
+            height: axFrame.height
+        )
+        var best: (screen: NSScreen, area: CGFloat)?
+        for screen in NSScreen.screens {
+            let intersection = screen.frame.intersection(nsFrame)
+            let area = intersection.width * intersection.height
+            if area > 0, area > (best?.area ?? 0) {
+                best = (screen, area)
+            }
+        }
+        return best?.screen ?? NSScreen.main
     }
 
     private func openApplication(at appURL: URL) {

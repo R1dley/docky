@@ -925,13 +925,19 @@ struct TileView: View {
     /// and `.appFolder` tiles participate — the app-folder case aggregates
     /// windows from every contained app.
     private func updateWindowPreviewPresentation(isHovering: Bool) {
+        // Freeze preview state while a context menu is open on this tile —
+        // the menu's mouse handling can drop us out of hover and prematurely
+        // dismiss, or restart the dwell once the user moves off. The
+        // preview's own hover monitor still keeps it alive if the cursor is
+        // over it; we just don't react from the tile side.
+        if isContextMenuPresented { return }
+
         windowPreviewDelayTask?.cancel()
         windowPreviewDelayTask = nil
 
         let bundleIDs = windowPreviewBundleIdentifiers
         guard !bundleIDs.isEmpty,
               !editMode.isActive,
-              !isContextMenuPresented,
               !isAppFolderPopoverPresented,
               !isAppFolderListMenuPresented
         else {
@@ -1164,6 +1170,13 @@ struct TileView: View {
             })
         }
 
+        if let windowsSubmenu = appFolderWindowsSubmenu(for: folder) {
+            if !actions.isEmpty {
+                actions.append(.divider)
+            }
+            actions.append(windowsSubmenu)
+        }
+
         let appActions = folder.apps.map { app in
             ContextAction.submenu(app.displayName, children: [
                 .action("Open") {
@@ -1183,6 +1196,60 @@ struct TileView: View {
         }
 
         return actions
+    }
+
+    /// "Windows" submenu for the folder tile: lists every visible (non-
+    /// minimized) window across the folder's apps in WindowRegistry MRU
+    /// order, each focusable, plus a Tile sub-section for arranging the top
+    /// two (or four) windows side-by-side / stacked / in quarters. Returns
+    /// nil when there are no visible windows so the submenu doesn't appear.
+    private func appFolderWindowsSubmenu(for folder: AppFolderTile) -> ContextAction? {
+        let bundleIDs = Set(folder.apps.map(\.bundleIdentifier))
+        guard !bundleIDs.isEmpty else { return nil }
+
+        let windows = WindowRegistry.shared.windows.filter { window in
+            bundleIDs.contains(window.bundleIdentifier) && !window.isMinimized
+        }
+        guard !windows.isEmpty else { return nil }
+
+        var children: [ContextAction] = windows.map { window in
+            .action(appWindowMenuTitle(for: window)) {
+                _ = WorkspaceService.shared.focus(window: window)
+            }
+        }
+
+        if windows.count >= 2 {
+            let workspace = WorkspaceService.shared
+            children.append(.divider)
+            children.append(contentsOf: [
+                .action(
+                    "Left and Right",
+                    image: contextMenuSymbol("rectangle.lefthalf.filled")
+                ) { _ = workspace.tile(windows: windows, layout: .leftRight) },
+                .action(
+                    "Right and Left",
+                    image: contextMenuSymbol("rectangle.righthalf.filled")
+                ) { _ = workspace.tile(windows: windows, layout: .rightLeft) },
+                .action(
+                    "Top and Bottom",
+                    image: contextMenuSymbol("rectangle.tophalf.filled")
+                ) { _ = workspace.tile(windows: windows, layout: .topBottom) },
+                .action(
+                    "Bottom and Top",
+                    image: contextMenuSymbol("rectangle.bottomhalf.filled")
+                ) { _ = workspace.tile(windows: windows, layout: .bottomTop) },
+            ])
+            if windows.count >= 3 {
+                children.append(
+                    .action(
+                        "Quarters",
+                        image: contextMenuSymbol("rectangle.split.2x2")
+                    ) { _ = workspace.tile(windows: windows, layout: .quarters) }
+                )
+            }
+        }
+
+        return .submenu("Windows", children: children)
     }
 
     private func appContextActions(
