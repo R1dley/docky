@@ -10,7 +10,6 @@ struct ProductSettingsView: View {
     @State private var licenseKey: String = ""
     @State private var trialEmail: String = ""
     @State private var isShowingTrialSheet = false
-    @State private var isShowingResetConfirmation = false
 
     var body: some View {
         Form {
@@ -101,31 +100,8 @@ struct ProductSettingsView: View {
                 }
             }
 
-            Section("Reset Preferences") {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Restores all of Docky's appearance, behavior, widget, and window-management preferences to their default values. Your pinned dock items and Pro registration are unaffected.")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Button("Reset to Defaults", role: .destructive) {
-                        isShowingResetConfirmation = true
-                    }
-                }
-                .padding(.vertical, 4)
-            }
         }
         .formStyle(.grouped)
-        .confirmationDialog(
-            "Reset all Docky preferences?",
-            isPresented: $isShowingResetConfirmation
-        ) {
-            Button("Reset to Defaults", role: .destructive) {
-                DockyPreferences.shared.resetToDefaults()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("All appearance, behavior, widget, and window-management settings will return to their defaults. This cannot be undone.")
-        }
         .onAppear(perform: syncFieldsFromService)
         .onChange(of: product.trialExpiresAt) { expiresAt in
             guard expiresAt != nil, product.currentTier == .pro else {

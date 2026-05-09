@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 
 struct AppearanceSettingsView: View {
     enum Subsection {
+        case general
         case indicators
         case tileLayout
         case windowShape
@@ -19,10 +20,13 @@ struct AppearanceSettingsView: View {
 
     @ObservedObject private var dockSettings = DockSettingsService.shared
     @ObservedObject private var preferences = DockyPreferences.shared
+    @State private var isShowingResetConfirmation = false
 
     var body: some View {
         Form {
             switch subsection {
+            case .general:
+                generalSection
             case .indicators:
                 indicatorsSection
             case .tileLayout:
@@ -34,6 +38,45 @@ struct AppearanceSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .confirmationDialog(
+            "Reset appearance settings?",
+            isPresented: $isShowingResetConfirmation
+        ) {
+            Button("Reset Appearance", role: .destructive) {
+                DockyPreferences.shared.resetAppearanceToDefaults()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Indicators, tile layout, window shape, window background, and the glass toggle will return to their defaults. App icons, behavior, widgets, and other settings are unaffected. This cannot be undone.")
+        }
+    }
+
+    @ViewBuilder
+    private var generalSection: some View {
+        Section("Glass") {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Disable Glass Look", isOn: $preferences.disablesGlassLook)
+                    .font(.headline)
+
+                Text("Removes the main window's glossy gradient border and Liquid Glass material while keeping the existing blur and background tinting.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+        }
+
+        Section("Reset Appearance") {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Restores the appearance preferences (indicators, tile layout, window shape, window background, glass) to their defaults. App icons, behavior, widgets, launchpad, and window-management settings keep their current values.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button("Reset Appearance", role: .destructive) {
+                    isShowingResetConfirmation = true
+                }
+            }
+            .padding(.vertical, 4)
+        }
     }
 
     @ViewBuilder
@@ -402,16 +445,6 @@ struct AppearanceSettingsView: View {
             }
             .padding(.vertical, 4)
             .disabled(preferences.windowClipShape == .circle)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Disable Glass Look", isOn: $preferences.disablesGlassLook)
-                    .font(.headline)
-
-                Text("Removes the main window's glossy gradient border while keeping the existing blur and background tinting.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
         }
     }
 

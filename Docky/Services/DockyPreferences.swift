@@ -2189,6 +2189,47 @@ final class DockyPreferences: ObservableObject {
         opensAtLogin = true
     }
 
+    /// Resets only the preferences exposed in Settings → Appearance
+    /// (General, Indicators, Tile Layout, Window Shape, Window
+    /// Background). App-icon overrides, behavior, widgets, launchpad,
+    /// window-management, and system-dock settings are untouched —
+    /// callers that want a full wipe should call `resetToDefaults()`
+    /// instead.
+    func resetAppearanceToDefaults() {
+        // General
+        disablesGlassLook = DefaultValues.disablesGlassLook
+
+        // Indicators
+        activeIndicatorShape = DefaultValues.activeIndicatorShape
+        activeIndicatorImagePath = DefaultValues.activeIndicatorImagePath
+        activeIndicatorColor = DefaultValues.activeIndicatorColor
+        activeIndicatorOffset = DefaultValues.activeIndicatorOffset
+        activeIndicatorScale = DefaultValues.activeIndicatorScale
+        dividerImagePath = DefaultValues.dividerImagePath
+        leftDividerImagePath = DefaultValues.leftDividerImagePath
+        rightDividerImagePath = DefaultValues.rightDividerImagePath
+        mirrorsLeftDividerOnRight = DefaultValues.mirrorsLeftDividerOnRight
+        dividerPaddingFraction = DefaultValues.dividerPaddingFraction
+        dividerOffset = DefaultValues.dividerOffset
+        dividerImageScale = DefaultValues.dividerImageScale
+
+        // Tile Layout (system tile size + magnification live on
+        // DockSettingsService and aren't reset here)
+        tileClipShape = DefaultValues.tileClipShape
+        tileVerticalPadding = DefaultValues.tileVerticalPadding
+        tileSpacing = DefaultValues.tileSpacing
+
+        // Window Shape
+        windowClipShape = DefaultValues.windowClipShape
+        windowCornerRadius = DefaultValues.windowCornerRadius
+
+        // Window Background
+        windowBackgroundImagePath = DefaultValues.windowBackgroundImagePath
+        windowBackgroundImageMode = DefaultValues.windowBackgroundImageMode
+        windowTintColor = DefaultValues.windowTintColor
+        windowTintOpacity = DefaultValues.windowTintOpacity
+    }
+
     func resetToDefaults() {
         tileVerticalPadding = DefaultValues.tileVerticalPadding
         tileSpacing = DefaultValues.tileSpacing

@@ -7,6 +7,7 @@ import SwiftUI
 
 private enum SettingsPane: String, CaseIterable, Identifiable {
     case docky
+    case appearanceGeneral
     case appearanceIndicators
     case appearanceTileLayout
     case appearanceWindowShape
@@ -31,6 +32,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .docky: "Docky"
+        case .appearanceGeneral: "General"
         case .appearanceIndicators: "Indicators"
         case .appearanceTileLayout: "Tile Layout"
         case .appearanceWindowShape: "Window Shape"
@@ -55,6 +57,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
     var symbolName: String {
         switch self {
         case .docky: "shippingbox"
+        case .appearanceGeneral: "slider.horizontal.3"
         case .appearanceIndicators: "circle.bottomhalf.filled"
         case .appearanceTileLayout: "square.grid.3x3"
         case .appearanceWindowShape: "rectangle.dashed"
@@ -79,6 +82,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
     var tileColor: Color {
         switch self {
         case .docky: .purple
+        case .appearanceGeneral: .teal
         case .appearanceIndicators: .green
         case .appearanceTileLayout: .orange
         case .appearanceWindowShape: .indigo
@@ -119,6 +123,7 @@ private struct SettingsSection: Identifiable {
 private let settingsSections: [SettingsSection] = [
     SettingsSection(id: "product", title: "Product", panes: [.docky]),
     SettingsSection(id: "appearance", title: "Appearance", panes: [
+        .appearanceGeneral,
         .appearanceIndicators,
         .appearanceTileLayout,
         .appearanceWindowShape,
@@ -231,6 +236,8 @@ private struct SettingsDetailView: View {
         switch pane {
         case .docky:
             ProductSettingsView()
+        case .appearanceGeneral:
+            AppearanceSettingsView(subsection: .general)
         case .appearanceIndicators:
             AppearanceSettingsView(subsection: .indicators)
         case .appearanceTileLayout:
