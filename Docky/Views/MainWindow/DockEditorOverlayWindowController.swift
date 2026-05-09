@@ -684,22 +684,23 @@ private struct DockEditorBrowserView: View {
         }
         .frame(width: panelSize.width, height: panelSize.height)
         .background(
-            .windowBackground,
-            in: .rect(
-                topLeadingRadius: position == .top || position == .left ? 0 : 30,
-                bottomLeadingRadius: position == .bottom || position == .left ? 0 : 30,
-                bottomTrailingRadius: position == .bottom || position == .right ? 0 : 30,
-                topTrailingRadius: position == .top || position == .right ? 0 : 30,
-                style: .continuous
-            )
+            Color(nsColor: .windowBackgroundColor),
+            in: panelChromeShape
         )
         .overlay {
-            ConcentricRectangle(
-                uniformTopCorners: .fixed(position == .top || position == .left ? 0 : 30),
-                uniformBottomCorners: .fixed(position == .bottom || position == .right ? 0 : 30)
-            )
-            .stroke(.primary.opacity(0.14), lineWidth: 1)
+            panelChromeShape
+                .stroke(.primary.opacity(0.14), lineWidth: 1)
         }
+    }
+
+    private var panelChromeShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: position == .top || position == .left ? 0 : 30,
+            bottomLeadingRadius: position == .bottom || position == .left ? 0 : 30,
+            bottomTrailingRadius: position == .bottom || position == .right ? 0 : 30,
+            topTrailingRadius: position == .top || position == .right ? 0 : 30,
+            style: .continuous
+        )
     }
 
     private var header: some View {

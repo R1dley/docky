@@ -127,7 +127,7 @@ struct ProductSettingsView: View {
             Text("All appearance, behavior, widget, and window-management settings will return to their defaults. This cannot be undone.")
         }
         .onAppear(perform: syncFieldsFromService)
-        .onChange(of: product.trialExpiresAt) { _, expiresAt in
+        .onChange(of: product.trialExpiresAt) { expiresAt in
             guard expiresAt != nil, product.currentTier == .pro else {
                 return
             }
@@ -145,7 +145,7 @@ struct ProductSettingsView: View {
 
                 TextField("Email Address", text: $trialEmail)
                     .textFieldStyle(.roundedBorder)
-                    .textContentType(.emailAddress)
+                    .modifier(EmailAddressContentTypeIfAvailable())
                     .disabled(product.isStartingTrial)
 
                 if product.isStartingTrial {
@@ -190,5 +190,19 @@ struct ProductSettingsView: View {
     private func syncFieldsFromService() {
         licenseKey = ""
         trialEmail = product.trialEmail
+    }
+}
+
+/// `UITextContentType.emailAddress` on macOS is gated behind 14+; on 13
+/// — or when the autofill content-type feature is force-disabled via
+/// `FeatureGate` — the text field works without the autofill hint.
+private struct EmailAddressContentTypeIfAvailable: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if FeatureGate.shared.isAvailable(.emailAutofillContentType), #available(macOS 14.0, *) {
+            content.textContentType(.emailAddress)
+        } else {
+            content
+        }
     }
 }

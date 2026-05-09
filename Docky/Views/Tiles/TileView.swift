@@ -443,7 +443,7 @@ struct TileView: View {
                 globalTileFrame = newFrame
                 TilePressService.shared.registerFrame(tileID: tile.id, globalFrame: newFrame)
             }
-            .onChange(of: isHovering) { _, isHovering in
+            .onChange(of: isHovering) { isHovering in
                 updateWidgetExpansionPresentation(isHovering: isHovering, sourceFrame: globalTileFrame)
             }
             .onDisappear {
@@ -462,27 +462,27 @@ struct TileView: View {
                 WindowPreviewWindowController.shared.dismiss(sourceTileID: tile.id)
                 TilePressService.shared.unregisterFrame(tileID: tile.id)
             }
-            .onChange(of: isFolderPopoverPresented) { _, isPresented in
+            .onChange(of: isFolderPopoverPresented) { isPresented in
                 updateTooltipPresentation()
                 guard !isPresented else { return }
                 lastFolderPopoverDismissedAt = Date.timeIntervalSinceReferenceDate
             }
-            .onChange(of: isFolderListMenuPresented) { _, _ in
+            .onChange(of: isFolderListMenuPresented) { _ in
                 updateTooltipPresentation()
             }
-            .onChange(of: isAppFolderListMenuPresented) { _, _ in
+            .onChange(of: isAppFolderListMenuPresented) { _ in
                 updateTooltipPresentation()
             }
-            .onChange(of: editMode.isActive) { _, isActive in
+            .onChange(of: editMode.isActive) { isActive in
                 guard isActive else { return }
                 widgetExpansionTask?.cancel()
                 widgetExpansionTask = nil
                 WidgetExpansionWindowController.shared.dismiss(sourceTileID: tile.id)
             }
-            .onChange(of: windowPreview.activeSourceTileID) { _, _ in
+            .onChange(of: windowPreview.activeSourceTileID) { _ in
                 updateTooltipPresentation()
             }
-            .onChange(of: dockDrag.springLoadedTileID) { _, springLoaded in
+            .onChange(of: dockDrag.springLoadedTileID) { springLoaded in
                 guard springLoaded == tile.id else { return }
                 switch tile.content {
                 case .appFolder:

@@ -476,7 +476,7 @@ final class TileStore: ObservableObject {
 
             let folderBundleIdentifiers = [targetBundleIdentifier] + sourceBundleIdentifiers
             let folderApps = folderBundleIdentifiers.compactMap(Self.makeAppTile(bundleIdentifier:))
-            let seededFolderName = AppFolderNamingService.shared.seedName(for: folderApps)
+            let seededFolderName = appFolderSeedName(for: folderApps)
             let createdFolder = PinnedTileItem.appFolder(
                 displayName: seededFolderName,
                 bundleIdentifiers: folderBundleIdentifiers,
@@ -887,6 +887,12 @@ final class TileStore: ObservableObject {
     }
 
     func smartOrganizePinnedItems() {
+        // Smart-organize is FoundationModels-backed (macOS 26+). On
+        // older systems — or when the feature is force-disabled via
+        // `FeatureGate` for testing — the action is a no-op; callers
+        // should hide or disable the entry point via the same gate.
+        guard FeatureGate.shared.isAvailable(.foundationModelsSmartOrganize),
+              #available(macOS 26.0, *) else { return }
         let existingItems = preferences.pinnedItems
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -1793,6 +1799,13 @@ final class TileStore: ObservableObject {
         guard apps.count >= 2 else {
             return
         }
+
+        // The LLM-powered suggester is macOS 26+ — or force-disabled
+        // via `FeatureGate` for testing. On earlier systems the
+        // deterministic seed name set at folder-creation time is what
+        // the user keeps until they rename manually.
+        guard FeatureGate.shared.isAvailable(.foundationModelsFolderNaming),
+              #available(macOS 26.0, *) else { return }
 
         Task { @MainActor [weak self] in
             guard let self else { return }

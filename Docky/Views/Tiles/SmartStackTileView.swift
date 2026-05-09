@@ -16,6 +16,10 @@ struct SmartStackTileView: View {
     @State private var accumulatedScrollOffset: CGFloat = 0
     @State private var showsPagingIndicator = false
     @State private var indicatorHideWorkItem: DispatchWorkItem?
+    /// Mirrors `tile.widgets.map(\.identifier)` so the macOS 13 single-value
+    /// `onChange(of:perform:)` form can recover the previous list on each
+    /// fire (the new two-arg form that hands you old/new is macOS 14+).
+    @State private var previousWidgetIdentifiers: [String] = []
 
     var body: some View {
         #if DEBUG
@@ -26,7 +30,9 @@ struct SmartStackTileView: View {
             handleScroll(deltaX: deltaX, deltaY: deltaY)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onChange(of: tile.widgets.map(\.identifier)) { oldIdentifiers, newIdentifiers in
+        .onChange(of: tile.widgets.map(\.identifier)) { newIdentifiers in
+            let oldIdentifiers = previousWidgetIdentifiers
+            previousWidgetIdentifiers = newIdentifiers
             if let newWidgetIdentifier = newIdentifiers.first(where: { !oldIdentifiers.contains($0) }),
                let newSelection = newIdentifiers.firstIndex(of: newWidgetIdentifier) {
                 selection = newSelection
@@ -38,6 +44,9 @@ struct SmartStackTileView: View {
             if newIdentifiers.count <= 1 {
                 hidePagingIndicator()
             }
+        }
+        .onAppear {
+            previousWidgetIdentifiers = tile.widgets.map(\.identifier)
         }
         .onDisappear(perform: hidePagingIndicator)
     }
@@ -64,7 +73,7 @@ struct SmartStackTileView: View {
                     .animation(.easeInOut(duration: 0.2), value: selection)
                 }
                 .clipped()
-                .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius, style: .continuous))
+                .dockyGlass(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .overlay(alignment: .trailing) {
                     if tile.widgets.count > 1 {
                         VStack(spacing: 5) {

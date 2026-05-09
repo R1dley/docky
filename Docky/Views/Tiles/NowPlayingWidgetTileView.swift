@@ -29,7 +29,7 @@ struct NowPlayingWidgetTileView: View {
 
             ZStack {
                 Color(nsColor: prominentTintColor)
-                    .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius, style: .continuous))
+                    .dockyGlass(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
 
                 if !isWithinStack {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -305,7 +305,7 @@ struct NowPlayingWidgetTileView: View {
             }
             .padding(layout.contentPadding)
         }
-        .onChange(of: trackChangeKey) {
+        .onChange(of: trackChangeKey) { _ in
             mediaPlayback.requestLyrics(for: tile.ownerBundleIdentifier)
         }
     }
@@ -647,7 +647,7 @@ private struct KaraokeLyricsView: View {
                     Color.clear.frame(height: layout.controlButtonSize)
                 }
             }
-            .onChange(of: activeIndex) { _, newIndex in
+            .onChange(of: activeIndex) { newIndex in
                 withAnimation(.easeInOut(duration: 0.35)) {
                     proxy.scrollTo(newIndex, anchor: .center)
                 }

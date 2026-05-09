@@ -127,17 +127,25 @@ final class RemindersService: ObservableObject {
         case .writeOnly, .denied, .restricted:
             return false
         case .notDetermined:
-            return await withCheckedContinuation { continuation in
-                eventStore.requestFullAccessToReminders { [weak self] granted, _ in
-                    guard let self else {
-                        continuation.resume(returning: granted)
-                        return
-                    }
+            if FeatureGate.shared.isAvailable(.eventKitFullAccessRequest), #available(macOS 14.0, *) {
+                return await withCheckedContinuation { continuation in
+                    eventStore.requestFullAccessToReminders { [weak self] granted, _ in
+                        guard let self else {
+                            continuation.resume(returning: granted)
+                            return
+                        }
 
-                    Task { @MainActor in
-                        self.refreshAuthorizationStatus()
-                        continuation.resume(returning: granted)
+                        Task { @MainActor in
+                            self.refreshAuthorizationStatus()
+                            continuation.resume(returning: granted)
+                        }
                     }
+                }
+            } else {
+                do {
+                    return try await eventStore.requestAccess(to: .reminder)
+                } catch {
+                    return false
                 }
             }
         @unknown default:

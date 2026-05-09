@@ -180,7 +180,7 @@ struct AppFolderTileView: View {
 
         return ZStack {
             Color.clear
-                .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius, style: .continuous))
+                .dockyGlass(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .strokeBorder(.white.opacity(0.1), lineWidth: 1)
@@ -270,8 +270,8 @@ struct AppFolderTileView: View {
     private func gridIcon(forBundleIdentifier bundleIdentifier: String, side: CGFloat) -> some View {
         if shouldApplyCircleClip(to: bundleIdentifier) {
             baseGridIcon(forBundleIdentifier: bundleIdentifier, side: side)
-                .glassEffect(.regular, in: .circle)
-                .clipShape(.circle)
+                .dockyGlass(in: Circle())
+                .clipShape(Circle())
         } else {
             baseGridIcon(forBundleIdentifier: bundleIdentifier, side: side)
         }
@@ -411,7 +411,7 @@ struct AppFolderPopoverView: View {
         .onAppear {
             onPopoverSizeChange(popoverSize)
         }
-        .onChange(of: tile.apps.count) { _, _ in
+        .onChange(of: tile.apps.count) { _ in
             onPopoverSizeChange(popoverSize)
         }
     }

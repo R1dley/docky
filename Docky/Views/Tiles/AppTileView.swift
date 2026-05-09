@@ -42,7 +42,7 @@ struct AppTileView: View {
                 baseIconView(in: size)
                     .clipShape(Circle())
             }
-            .glassEffect()
+            .dockyGlass()
             .padding(transparencyCompensationInset)
         } else {
             baseIconView(in: size)

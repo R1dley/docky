@@ -105,17 +105,25 @@ final class CalendarService: ObservableObject {
         case .writeOnly, .denied, .restricted:
             return false
         case .notDetermined:
-            return await withCheckedContinuation { continuation in
-                eventStore.requestFullAccessToEvents { [weak self] granted, _ in
-                    guard let self else {
-                        continuation.resume(returning: granted)
-                        return
-                    }
+            if FeatureGate.shared.isAvailable(.eventKitFullAccessRequest), #available(macOS 14.0, *) {
+                return await withCheckedContinuation { continuation in
+                    eventStore.requestFullAccessToEvents { [weak self] granted, _ in
+                        guard let self else {
+                            continuation.resume(returning: granted)
+                            return
+                        }
 
-                    Task { @MainActor in
-                        self.refreshAuthorizationStatus()
-                        continuation.resume(returning: granted)
+                        Task { @MainActor in
+                            self.refreshAuthorizationStatus()
+                            continuation.resume(returning: granted)
+                        }
                     }
+                }
+            } else {
+                do {
+                    return try await eventStore.requestAccess(to: .event)
+                } catch {
+                    return false
                 }
             }
         @unknown default:

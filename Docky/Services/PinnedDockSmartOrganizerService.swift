@@ -9,12 +9,14 @@ import Foundation
 #if canImport(FoundationModels)
 import FoundationModels
 
+@available(macOS 26.0, *)
 @Generable
 private struct SmartPinnedLayoutSuggestion {
     @Guide(description: "The organized pinned dock items in final left-to-right order.")
     var items: [SmartPinnedLayoutSuggestionItem]
 }
 
+@available(macOS 26.0, *)
 @Generable
 private struct SmartPinnedLayoutSuggestionItem {
     @Guide(description: "One of: app, folder, divider, spacer, widget, smartStack, launchpad.")
@@ -40,6 +42,7 @@ private struct SmartPinnedLayoutSuggestionItem {
 }
 #endif
 
+@available(macOS 26.0, *)
 final class PinnedDockSmartOrganizerService {
     static let shared = PinnedDockSmartOrganizerService()
 

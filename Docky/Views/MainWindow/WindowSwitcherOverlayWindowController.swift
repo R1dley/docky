@@ -306,9 +306,9 @@ private struct WindowSwitcherOverlayView: View {
             .frame(maxWidth: max(0, containerSize.width - 80))
             .fixedSize(horizontal: true, vertical: true)
             .background(.primary.opacity(0.18))
-            .glassEffect(.regular, in: .rect(cornerRadius: containerCornerRadius, style: .continuous))
+            .dockyGlass(in: RoundedRectangle(cornerRadius: containerCornerRadius, style: .continuous))
             .clipShape(RoundedRectangle(cornerRadius: containerCornerRadius, style: .continuous))
-            .onChange(of: switcher.selectedWindowIdentifier) { _, selection in
+            .onChange(of: switcher.selectedWindowIdentifier) { selection in
                 guard let selection else { return }
                 withAnimation(.easeInOut(duration: 0.14)) {
                     scrollProxy.scrollTo(selection, anchor: .center)
@@ -377,9 +377,9 @@ private struct WindowSwitcherListView: View {
             .frame(maxHeight: CGFloat(maxVisibleRows) * rowHeight + 16)
             .fixedSize(horizontal: true, vertical: true)
             .background(.primary.opacity(0.18))
-            .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius, style: .continuous))
+            .dockyGlass(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .onChange(of: switcher.selectedWindowIdentifier) { _, selection in
+            .onChange(of: switcher.selectedWindowIdentifier) { selection in
                 guard let selection else { return }
                 withAnimation(.easeInOut(duration: 0.14)) {
                     scrollProxy.scrollTo(selection, anchor: .center)

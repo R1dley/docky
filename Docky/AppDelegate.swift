@@ -480,12 +480,107 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         debugMenu.addItem(seedDummyWidgetContentItem)
         debugMenu.addItem(showOnboardingItem)
         debugMenu.addItem(productModeItem)
+#if DEBUG
+        debugMenu.addItem(makeSimulatedOSVersionMenuItem())
+#endif
         debugMenu.addItem(.separator())
         debugMenu.addItem(quitItem)
 
         statusItem.menu = debugMenu
         debugStatusItem = statusItem
     }
+
+#if DEBUG
+    /// "Simulated OS Version" submenu. Selecting a version writes it to
+    /// `FeatureGate.preferredOSVersion` and relaunches Docky so every
+    /// gated path re-evaluates against the new value. Items above the
+    /// real running OS are disabled — `#available` paired with the gate
+    /// can clamp down but never up, so simulating a higher version
+    /// would silently fall through to the real OS anyway.
+    private func makeSimulatedOSVersionMenuItem() -> NSMenuItem {
+        let submenu = NSMenu(title: "Simulated OS Version")
+        let host = ProcessInfo.processInfo.operatingSystemVersion
+        let preferred = FeatureGate.shared.preferredOSVersion
+
+        let realOSItem = NSMenuItem(
+            title: "Use Real OS (\(Self.formatOSVersion(host)))",
+            action: #selector(clearSimulatedOSVersion(_:)),
+            keyEquivalent: ""
+        )
+        realOSItem.target = self
+        realOSItem.state = (preferred == nil) ? .on : .off
+        submenu.addItem(realOSItem)
+        submenu.addItem(.separator())
+
+        let candidates: [(major: Int, minor: Int, name: String)] = [
+            (13, 0, "Ventura"),
+            (13, 5, "Ventura"),
+            (14, 0, "Sonoma"),
+            (15, 0, "Sequoia"),
+            (26, 0, "Tahoe"),
+        ]
+
+        for entry in candidates {
+            let version = OperatingSystemVersion(majorVersion: entry.major, minorVersion: entry.minor, patchVersion: 0)
+            let item = NSMenuItem(
+                title: "macOS \(entry.major).\(entry.minor) (\(entry.name))",
+                action: #selector(applySimulatedOSVersion(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = version
+            item.state = (preferred.map {
+                $0.majorVersion == version.majorVersion && $0.minorVersion == version.minorVersion
+            } ?? false) ? .on : .off
+            // Can only simulate going down: a paired `#available` would
+            // clamp anything above the real host back to "unavailable".
+            item.isEnabled = !Self.isVersion(version, greaterThan: host)
+            submenu.addItem(item)
+        }
+
+        let item = NSMenuItem(title: "Simulated OS Version", action: nil, keyEquivalent: "")
+        item.submenu = submenu
+        return item
+    }
+
+    @objc private func clearSimulatedOSVersion(_ sender: Any?) {
+        FeatureGate.shared.setPreferredOSVersion(nil)
+        relaunchApp()
+    }
+
+    @objc private func applySimulatedOSVersion(_ sender: NSMenuItem) {
+        guard let version = sender.representedObject as? OperatingSystemVersion else { return }
+        FeatureGate.shared.setPreferredOSVersion(version)
+        relaunchApp()
+    }
+
+    private func relaunchApp() {
+        let bundlePath = Bundle.main.bundlePath
+        let task = Process()
+        task.launchPath = "/usr/bin/open"
+        task.arguments = ["-n", "-a", bundlePath]
+        do {
+            try task.run()
+        } catch {
+            NSLog("[Docky] Relaunch failed: \(error.localizedDescription)")
+            return
+        }
+        NSApp.terminate(nil)
+    }
+
+    private static func formatOSVersion(_ version: OperatingSystemVersion) -> String {
+        if version.patchVersion > 0 {
+            return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
+        }
+        return "\(version.majorVersion).\(version.minorVersion)"
+    }
+
+    private static func isVersion(_ lhs: OperatingSystemVersion, greaterThan rhs: OperatingSystemVersion) -> Bool {
+        if lhs.majorVersion != rhs.majorVersion { return lhs.majorVersion > rhs.majorVersion }
+        if lhs.minorVersion != rhs.minorVersion { return lhs.minorVersion > rhs.minorVersion }
+        return lhs.patchVersion > rhs.patchVersion
+    }
+#endif
 
     private func debugSnapshotText() -> String {
         let preferences = DockyPreferences.shared
