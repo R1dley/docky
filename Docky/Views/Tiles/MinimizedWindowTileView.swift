@@ -8,7 +8,7 @@ import SwiftUI
 
 struct MinimizedWindowTileView: View {
     let tile: AppWindow
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var workspace = WorkspaceService.shared
 
     var body: some View {

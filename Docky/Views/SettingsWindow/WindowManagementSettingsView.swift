@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct WindowManagementSettingsView: View {
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var product = ProductService.shared
     @ObservedObject private var permissions = PermissionsService.shared
     @State private var isRecordingShortcut = false

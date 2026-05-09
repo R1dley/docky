@@ -16,7 +16,7 @@ struct AppTileView: View {
     /// pass their own padding here, since per-bundle override padding
     /// only applies to real app overrides.
     var iconOverridePaddingFraction: CGFloat? = nil
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var workspace = WorkspaceService.shared
 
     private var isRunning: Bool {

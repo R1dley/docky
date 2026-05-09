@@ -350,14 +350,11 @@ final class DockEditorOverlayWindowController: NSWindowController {
     }
 
     private func observeSpaceBehavior() {
-        window?.collectionBehavior = preferences.windowSpaceBehavior.collectionBehavior(includesFullScreenAuxiliary: false)
-
-        preferences.$windowSpaceBehavior
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] behavior in
-                self?.window?.collectionBehavior = behavior.collectionBehavior(includesFullScreenAuxiliary: false)
-            }
-            .store(in: &cancellables)
+        observeChanges { [weak self] in
+            let behavior = DockyPreferences.shared.windowSpaceBehavior
+            self?.window?.collectionBehavior = behavior.collectionBehavior(includesFullScreenAuxiliary: false)
+        }
+        .store(in: &cancellables)
     }
 
     private func presentOverlay() {
@@ -498,7 +495,7 @@ private struct DockEditorOverlayView: View {
     @ObservedObject var state: DockEditorOverlayState
     @ObservedObject private var editMode = DockEditModeService.shared
     @ObservedObject private var dockSettings = DockSettingsService.shared
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
 
     var body: some View {
         GeometryReader { proxy in
@@ -870,7 +867,7 @@ private struct DockEditorItemPreview: View {
     let selectedSpan: TileSpan?
     let scale: DockEditorPreviewScale
 
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
 
     var body: some View {
         let previewSize = size

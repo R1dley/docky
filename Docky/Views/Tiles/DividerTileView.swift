@@ -10,7 +10,7 @@ struct DividerTileView: View {
     let tileID: String
     @ObservedObject private var dockSettings = DockSettingsService.shared
     @ObservedObject private var layout = DockLayoutService.shared
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
 
     var body: some View {
         GeometryReader { proxy in

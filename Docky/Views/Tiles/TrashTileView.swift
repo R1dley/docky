@@ -8,7 +8,7 @@ import SwiftUI
 
 struct TrashTileView: View {
     @ObservedObject private var trash = TrashService.shared
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
 
     var body: some View {
         GeometryReader { proxy in

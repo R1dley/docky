@@ -71,87 +71,51 @@ final class TileStore: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.rebuildTiles() }
             .store(in: &cancellables)
-        preferences.$pinnedItems
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.synchronizeAppWidgetDisplaysWithFolders()
-                self?.refreshPinnedTilesFromPreferences()
-                self?.rebuildTiles()
-            }
-            .store(in: &cancellables)
-        preferences.$widgetPlacements
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.rebuildTiles()
-            }
-            .store(in: &cancellables)
-        preferences.$appWidgetDisplays
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.rebuildTiles()
-            }
-            .store(in: &cancellables)
-        preferences.$hiddenAppBundleIdentifiers
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.refreshPinnedTilesFromPreferences()
-                self?.rebuildTiles()
-            }
-            .store(in: &cancellables)
-        preferences.$trailingItems
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.refreshTrailingTilesFromPreferences()
-                self?.rebuildTiles()
-            }
-            .store(in: &cancellables)
-        preferences.$showsGroupedOpenedAppsInDock
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.rebuildTiles()
-            }
-            .store(in: &cancellables)
-        preferences.$showsActivePinnedSeparator
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.rebuildTiles()
-            }
-            .store(in: &cancellables)
-        preferences.$showsRunningApps
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.rebuildTiles()
-            }
-            .store(in: &cancellables)
-        preferences.$showsMinimizedWindows
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.rebuildTiles()
-            }
-            .store(in: &cancellables)
-        preferences.$enablesShelveMode
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.rebuildTiles()
-            }
-            .store(in: &cancellables)
-        preferences.$hidesRecentApps
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.rebuildTiles()
-            }
-            .store(in: &cancellables)
+        // `DockyPreferences` is `@Observable`. We observe each
+        // property bundle through `observeChanges` so the same change
+        // signal fires only when the relevant property mutates.
+        // (`.dropFirst()` skipped the Combine initial emission; the
+        // Observation closure runs once on install to register reads
+        // — calling `rebuildTiles` etc. then is safe and idempotent.)
+        observeChanges { [weak self] in
+            _ = DockyPreferences.shared.pinnedItems
+            self?.synchronizeAppWidgetDisplaysWithFolders()
+            self?.refreshPinnedTilesFromPreferences()
+            self?.rebuildTiles()
+        }
+        .store(in: &cancellables)
+        observeChanges { [weak self] in
+            _ = DockyPreferences.shared.widgetPlacements
+            self?.rebuildTiles()
+        }
+        .store(in: &cancellables)
+        observeChanges { [weak self] in
+            _ = DockyPreferences.shared.appWidgetDisplays
+            self?.rebuildTiles()
+        }
+        .store(in: &cancellables)
+        observeChanges { [weak self] in
+            _ = DockyPreferences.shared.hiddenAppBundleIdentifiers
+            self?.refreshPinnedTilesFromPreferences()
+            self?.rebuildTiles()
+        }
+        .store(in: &cancellables)
+        observeChanges { [weak self] in
+            _ = DockyPreferences.shared.trailingItems
+            self?.refreshTrailingTilesFromPreferences()
+            self?.rebuildTiles()
+        }
+        .store(in: &cancellables)
+        observeChanges { [weak self] in
+            _ = DockyPreferences.shared.showsGroupedOpenedAppsInDock
+            _ = DockyPreferences.shared.showsActivePinnedSeparator
+            _ = DockyPreferences.shared.showsRunningApps
+            _ = DockyPreferences.shared.showsMinimizedWindows
+            _ = DockyPreferences.shared.enablesShelveMode
+            _ = DockyPreferences.shared.hidesRecentApps
+            self?.rebuildTiles()
+        }
+        .store(in: &cancellables)
         mediaPlayback.$statesByBundleIdentifier
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in

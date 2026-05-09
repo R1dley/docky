@@ -14,7 +14,7 @@ struct AppFolderTileView: View {
     let suppressesGroupedOpenedBackdrop: Bool
     @ObservedObject private var dockSettings = DockSettingsService.shared
     @ObservedObject private var layout = DockLayoutService.shared
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var product = ProductService.shared
     @ObservedObject private var store = TileStore.shared
     @ObservedObject private var workspace = WorkspaceService.shared
@@ -29,7 +29,7 @@ struct AppFolderTileView: View {
         self.suppressesGroupedOpenedBackdrop = suppressesGroupedOpenedBackdrop
         self._dockSettings = ObservedObject(wrappedValue: DockSettingsService.shared)
         self._layout = ObservedObject(wrappedValue: DockLayoutService.shared)
-        self._preferences = ObservedObject(wrappedValue: DockyPreferences.shared)
+        self._preferences = Bindable(wrappedValue: DockyPreferences.shared)
         self._product = ObservedObject(wrappedValue: ProductService.shared)
         self._store = ObservedObject(wrappedValue: TileStore.shared)
         self._workspace = ObservedObject(wrappedValue: WorkspaceService.shared)
@@ -311,7 +311,7 @@ struct AppFolderPopoverView: View {
     let tile: AppFolderTile
     @Binding var isPresented: Bool
     let onPopoverSizeChange: (CGSize) -> Void
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @State private var hoveredBundleIdentifier: String?
 
     private let columns = 3

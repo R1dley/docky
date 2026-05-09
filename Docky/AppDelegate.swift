@@ -638,8 +638,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             return
         }
 
-        DockyPreferences.shared.objectWillChange
-            .merge(with: DockSettingsService.shared.objectWillChange)
+        // `DockyPreferences` is `@Observable` (no `objectWillChange`).
+        // Refresh on any read of `debugSnapshotText()` — the
+        // Observation framework tracks every property the snapshot
+        // touches and re-runs this closure when any of them change.
+        observeChanges { [weak self] in
+            self?.refreshDebugSnapshotText()
+        }
+        .store(in: &debugSnapshotCancellables)
+
+        DockSettingsService.shared.objectWillChange
             .sink { [weak self] _ in
                 self?.refreshDebugSnapshotText()
             }

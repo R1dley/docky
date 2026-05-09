@@ -113,31 +113,26 @@ final class WindowSwitcherOverlayWindowController: NSWindowController {
     }
 
     private func observeSpaceBehavior() {
-        preferences.$windowSpaceBehavior
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] behavior in
-                self?.window?.collectionBehavior = behavior.collectionBehavior(includesFullScreenAuxiliary: true)
-            }
-            .store(in: &cancellables)
+        observeChanges { [weak self] in
+            let behavior = DockyPreferences.shared.windowSpaceBehavior
+            self?.window?.collectionBehavior = behavior.collectionBehavior(includesFullScreenAuxiliary: true)
+        }
+        .store(in: &cancellables)
     }
 
     private func observePreviewMode() {
-        Publishers.CombineLatest(
-            preferences.$showsWindowSwitcherFocusPreview,
-            preferences.$windowSwitcherPreviewMode
-        )
-        .receive(on: DispatchQueue.main)
-        .sink { [weak self] _, _ in
+        observeChanges { [weak self] in
+            _ = DockyPreferences.shared.showsWindowSwitcherFocusPreview
+            _ = DockyPreferences.shared.windowSwitcherPreviewMode
             self?.refreshOverlayPresentation()
         }
         .store(in: &cancellables)
 
-        preferences.$windowSwitcherLayout
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.refreshOverlayPresentation()
-            }
-            .store(in: &cancellables)
+        observeChanges { [weak self] in
+            _ = DockyPreferences.shared.windowSwitcherLayout
+            self?.refreshOverlayPresentation()
+        }
+        .store(in: &cancellables)
 
         PermissionsService.shared.$screenCapture
             .removeDuplicates()
@@ -208,7 +203,7 @@ private final class WindowSwitcherOverlayWindow: NSWindow {
 
 private struct WindowSwitcherOverlayView: View {
     @ObservedObject private var switcher = WindowSwitcherService.shared
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var permissions = PermissionsService.shared
 
     private let innerPreviewCornerRadius: CGFloat = 16

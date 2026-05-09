@@ -81,12 +81,11 @@ final class DockEditorHintWindowController: NSWindowController {
     }
 
     private func observeSpaceBehavior() {
-        preferences.$windowSpaceBehavior
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] behavior in
-                self?.window?.collectionBehavior = behavior.collectionBehavior(includesFullScreenAuxiliary: true)
-            }
-            .store(in: &cancellables)
+        observeChanges { [weak self] in
+            let behavior = DockyPreferences.shared.windowSpaceBehavior
+            self?.window?.collectionBehavior = behavior.collectionBehavior(includesFullScreenAuxiliary: true)
+        }
+        .store(in: &cancellables)
     }
 
     private func schedulePresentationIfNeeded() {

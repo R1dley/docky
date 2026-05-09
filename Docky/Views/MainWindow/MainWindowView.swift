@@ -14,7 +14,7 @@ struct MainWindowView: View {
     private let chromeResizeAnimation: Animation = .easeInOut(duration: 0.18)
 
     @ObservedObject private var dockSettings = DockSettingsService.shared
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var layoutService = DockLayoutService.shared
 
     var body: some View {

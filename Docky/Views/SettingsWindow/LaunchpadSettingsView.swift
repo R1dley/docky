@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct LaunchpadSettingsView: View {
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var product = ProductService.shared
     @State private var isRecordingShortcut = false
 

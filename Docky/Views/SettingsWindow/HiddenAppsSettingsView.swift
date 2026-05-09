@@ -7,7 +7,7 @@ import AppKit
 import SwiftUI
 
 struct HiddenAppsSettingsView: View {
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
 
     var body: some View {
         Form {
@@ -58,7 +58,7 @@ struct HiddenAppsSettingsView: View {
 private struct HiddenAppRow: View {
     let app: HiddenAppSettingsEntry
 
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {

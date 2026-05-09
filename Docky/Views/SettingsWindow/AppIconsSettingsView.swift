@@ -8,7 +8,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct AppIconsSettingsView: View {
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var product = ProductService.shared
     @ObservedObject private var workspace = WorkspaceService.shared
 
@@ -141,7 +141,7 @@ struct AppIconsSettingsView: View {
 private struct AppIconOverrideRow: View {
     let entry: AppIconSettingsEntry
 
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var product = ProductService.shared
 
     var body: some View {
@@ -274,7 +274,7 @@ private struct AppIconSettingsEntry: Identifiable {
 private struct TrashIconOverrideRow: View {
     let state: TrashIconState
 
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var product = ProductService.shared
 
     var body: some View {
@@ -401,7 +401,7 @@ private struct FolderIconSettingsEntry: Identifiable {
 private struct FolderIconOverrideRow: View {
     let entry: FolderIconSettingsEntry
 
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var product = ProductService.shared
 
     var body: some View {
@@ -518,7 +518,7 @@ private struct FolderIconOverrideRow: View {
 }
 
 private struct LaunchpadIconOverrideRow: View {
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var product = ProductService.shared
 
     var body: some View {

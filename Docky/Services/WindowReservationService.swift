@@ -37,9 +37,22 @@ final class WindowReservationService {
     private init() {}
 
     func start() {
-        Publishers.CombineLatest(preferences.$maximizedWindowBehavior, permissions.$accessibility)
+        // `permissions.$accessibility` is still ObservableObject-based,
+        // so re-derive both inputs every time either side fires. The
+        // Observation read of `preferences.maximizedWindowBehavior`
+        // re-runs the closure on its own changes; the Combine .sink
+        // handles the permission side.
+        observeChanges { [weak self] in
+            let mode = DockyPreferences.shared.maximizedWindowBehavior
+            let status = PermissionsService.shared.accessibility
+            self?.updateActivation(mode: mode, status: status)
+        }
+        .store(in: &cancellables)
+
+        permissions.$accessibility
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] mode, status in
+            .sink { [weak self] status in
+                let mode = DockyPreferences.shared.maximizedWindowBehavior
                 self?.updateActivation(mode: mode, status: status)
             }
             .store(in: &cancellables)

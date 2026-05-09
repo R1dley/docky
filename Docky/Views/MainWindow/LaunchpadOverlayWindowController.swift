@@ -124,12 +124,11 @@ final class LaunchpadOverlayWindowController: NSWindowController {
     }
 
     private func observeSpaceBehavior() {
-        preferences.$windowSpaceBehavior
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] behavior in
-                self?.window?.collectionBehavior = behavior.collectionBehavior(includesFullScreenAuxiliary: true)
-            }
-            .store(in: &cancellables)
+        observeChanges { [weak self] in
+            let behavior = DockyPreferences.shared.windowSpaceBehavior
+            self?.window?.collectionBehavior = behavior.collectionBehavior(includesFullScreenAuxiliary: true)
+        }
+        .store(in: &cancellables)
     }
 
     private func configureHiddenWindowState() {
@@ -216,7 +215,7 @@ private final class LaunchpadOverlayWindow: NSWindow {
 
 private struct LaunchpadOverlayView: View {
     @ObservedObject private var overlay = LaunchpadOverlayService.shared
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @State private var searchText = ""
     @State private var selectedEntryID: String?
     @State private var visiblePageID: String?
@@ -674,7 +673,7 @@ private struct LaunchpadOverlayView: View {
 private struct LaunchpadAppCard: View {
     let app: AppTile
     let cellSize: CGSize
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
 
     var body: some View {
         VStack(spacing: cellSpacing) {
@@ -734,7 +733,7 @@ private struct LaunchpadAppCard: View {
 private struct LaunchpadFolderCard: View {
     let folder: AppFolderTile
     let cellSize: CGSize
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
 
     private static let gridDimension = 3
 

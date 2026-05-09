@@ -3,16 +3,15 @@
 //  Docky
 //
 //  Docky's own user-adjustable settings. Persisted to UserDefaults.
-//  Consume via `DockyPreferences.shared`; publishes changes through
-//  ObservableObject + @Published so callers can observe live updates.
-//
-//  Not backed by a settings window yet — values are mutated in code for now,
-//  but the property surface is ready for a future preferences UI.
+//  Consume via `DockyPreferences.shared`; the class is `@Observable`
+//  so SwiftUI views auto-track only the properties they read in body
+//  and Combine consumers bridge through `observe(_:)` from
+//  `ObservationBridge.swift`.
 //
 
 import AppKit
-import Combine
 import Foundation
+import Observation
 
 enum PinnedTileItemKind: String, Codable, Equatable {
     case app
@@ -845,12 +844,12 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-final class DockyPreferences: ObservableObject {
+@Observable final class DockyPreferences {
     static let shared = DockyPreferences()
 
     /// Padding applied inside each dock tile above and below the icon content.
     /// Total window height becomes `iconHeight + tileVerticalPadding * 2`.
-    @Published var tileVerticalPadding: CGFloat {
+    var tileVerticalPadding: CGFloat {
         didSet {
             guard tileVerticalPadding != oldValue else { return }
             defaults.set(Double(tileVerticalPadding), forKey: Keys.tileVerticalPadding)
@@ -858,7 +857,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Spacing applied between adjacent dock tiles.
-    @Published var tileSpacing: CGFloat {
+    var tileSpacing: CGFloat {
         didSet {
             guard tileSpacing != oldValue else { return }
             defaults.set(Double(tileSpacing), forKey: Keys.tileSpacing)
@@ -866,7 +865,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Clip shape applied to Docky-rendered tile chrome.
-    @Published var tileClipShape: DockClipShape {
+    var tileClipShape: DockClipShape {
         didSet {
             guard tileClipShape != oldValue else { return }
             defaults.set(tileClipShape.rawValue, forKey: Keys.tileClipShape)
@@ -874,7 +873,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Corner radius applied to the main dock window.
-    @Published var windowCornerRadius: CGFloat {
+    var windowCornerRadius: CGFloat {
         didSet {
             guard windowCornerRadius != oldValue else { return }
             defaults.set(Double(windowCornerRadius), forKey: Keys.windowCornerRadius)
@@ -882,7 +881,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Clip shape applied to the main dock chrome.
-    @Published var windowClipShape: DockClipShape {
+    var windowClipShape: DockClipShape {
         didSet {
             guard windowClipShape != oldValue else { return }
             defaults.set(windowClipShape.rawValue, forKey: Keys.windowClipShape)
@@ -890,7 +889,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Optional tint override for the main dock window. `nil` follows the system material tint.
-    @Published var windowTintColor: DockColor? {
+    var windowTintColor: DockColor? {
         didSet {
             guard windowTintColor != oldValue else { return }
             persistWindowTintColor(windowTintColor)
@@ -898,7 +897,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Opacity applied to the main dock window tint.
-    @Published var windowTintOpacity: CGFloat {
+    var windowTintOpacity: CGFloat {
         didSet {
             guard windowTintOpacity != oldValue else { return }
             defaults.set(Double(windowTintOpacity), forKey: Keys.windowTintOpacity)
@@ -906,7 +905,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Whether the main dock window should suppress its gradient border chrome.
-    @Published var disablesGlassLook: Bool {
+    var disablesGlassLook: Bool {
         didSet {
             guard disablesGlassLook != oldValue else { return }
             defaults.set(disablesGlassLook, forKey: Keys.disablesGlassLook)
@@ -914,7 +913,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Optional image path used as the main dock window background.
-    @Published var windowBackgroundImagePath: String? {
+    var windowBackgroundImagePath: String? {
         didSet {
             guard windowBackgroundImagePath != oldValue else { return }
 
@@ -929,7 +928,7 @@ final class DockyPreferences: ObservableObject {
     /// How the background image is rendered inside the chrome. `fill` scales
     /// to cover the chrome while `sprite` clips the leading/trailing thirds
     /// and stretches the middle along the dock's axis.
-    @Published var windowBackgroundImageMode: DockBackgroundImageMode {
+    var windowBackgroundImageMode: DockBackgroundImageMode {
         didSet {
             guard windowBackgroundImageMode != oldValue else { return }
             defaults.set(windowBackgroundImageMode.rawValue, forKey: Keys.windowBackgroundImageMode)
@@ -937,7 +936,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Edge Docky anchors itself to. `system` mirrors the macOS Dock.
-    @Published var windowPosition: DockWindowPosition {
+    var windowPosition: DockWindowPosition {
         didSet {
             guard windowPosition != oldValue else { return }
             defaults.set(windowPosition.rawValue, forKey: Keys.windowPosition)
@@ -946,7 +945,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Which display owns Docky's single main window.
-    @Published var windowDisplayTarget: DockWindowDisplayTarget {
+    var windowDisplayTarget: DockWindowDisplayTarget {
         didSet {
             guard windowDisplayTarget != oldValue else { return }
             defaults.set(windowDisplayTarget.rawValue, forKey: Keys.windowDisplayTarget)
@@ -954,7 +953,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Whether Docky's windows stay in the active Space or join all Spaces.
-    @Published var windowSpaceBehavior: DockWindowSpaceBehavior {
+    var windowSpaceBehavior: DockWindowSpaceBehavior {
         didSet {
             guard windowSpaceBehavior != oldValue else { return }
             defaults.set(windowSpaceBehavior.rawValue, forKey: Keys.windowSpaceBehavior)
@@ -962,7 +961,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Whether Docky's main window should slide off-screen until revealed.
-    @Published var autohidesWindow: Bool {
+    var autohidesWindow: Bool {
         didSet {
             guard autohidesWindow != oldValue else { return }
             defaults.set(autohidesWindow, forKey: Keys.autohidesWindow)
@@ -970,7 +969,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Whether Docky should register itself to launch when the user logs in.
-    @Published var opensAtLogin: Bool {
+    var opensAtLogin: Bool {
         didSet {
             guard opensAtLogin != oldValue else { return }
             defaults.set(opensAtLogin, forKey: Keys.opensAtLogin)
@@ -987,7 +986,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Delay before Docky hides its own window after interaction ends.
-    @Published var autohideWindowDelay: TimeInterval {
+    var autohideWindowDelay: TimeInterval {
         didSet {
             let clampedValue = max(0, autohideWindowDelay)
             guard clampedValue != oldValue else {
@@ -1008,7 +1007,7 @@ final class DockyPreferences: ObservableObject {
 
     /// How Docky reacts to a maximized (visibleFrame-sized, non-fullscreen)
     /// window on its target screen.
-    @Published var maximizedWindowBehavior: MaximizedWindowBehavior {
+    var maximizedWindowBehavior: MaximizedWindowBehavior {
         didSet {
             guard maximizedWindowBehavior != oldValue else { return }
             defaults.set(maximizedWindowBehavior.rawValue, forKey: Keys.maximizedWindowBehavior)
@@ -1018,7 +1017,7 @@ final class DockyPreferences: ObservableObject {
     /// Dwell time the pointer must spend at the screen edge before Docky
     /// reveals while a fullscreen app is on the target screen. Mirrors the
     /// macOS Dock's intent-gating behavior in fullscreen.
-    @Published var fullscreenRevealDelay: TimeInterval {
+    var fullscreenRevealDelay: TimeInterval {
         didSet {
             let clampedValue = max(0, fullscreenRevealDelay)
             guard clampedValue != oldValue else {
@@ -1040,7 +1039,7 @@ final class DockyPreferences: ObservableObject {
     /// Hover dwell before the per-tile window preview slides up. Same
     /// clamp pattern as the other delay prefs so the slider can never go
     /// negative.
-    @Published var windowPreviewHoverDelay: TimeInterval {
+    var windowPreviewHoverDelay: TimeInterval {
         didSet {
             let clampedValue = max(0, windowPreviewHoverDelay)
             guard clampedValue != oldValue else {
@@ -1062,7 +1061,7 @@ final class DockyPreferences: ObservableObject {
     /// Layout for the per-tile hover window preview. Independent from the
     /// global switcher's layout so users can prefer thumbnails in one and
     /// list in the other.
-    @Published var windowPreviewLayout: WindowSwitcherLayout {
+    var windowPreviewLayout: WindowSwitcherLayout {
         didSet {
             guard windowPreviewLayout != oldValue else { return }
             defaults.set(windowPreviewLayout.rawValue, forKey: Keys.windowPreviewLayout)
@@ -1073,7 +1072,7 @@ final class DockyPreferences: ObservableObject {
     /// Turning this on snapshots the user's current Dock preferences and
     /// overwrites autohide/bounce behavior; turning it off restores the
     /// snapshot. The snapshot is also restored when Docky quits.
-    @Published var hidesSystemDock: Bool {
+    var hidesSystemDock: Bool {
         didSet {
             guard hidesSystemDock != oldValue else { return }
             defaults.set(hidesSystemDock, forKey: Keys.hidesSystemDock)
@@ -1082,7 +1081,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// How Docky handles overflow when tiles exceed the screen on the dock axis.
-    @Published var overflowBehavior: DockOverflowBehavior {
+    var overflowBehavior: DockOverflowBehavior {
         didSet {
             guard overflowBehavior != oldValue else { return }
             defaults.set(overflowBehavior.rawValue, forKey: Keys.overflowBehavior)
@@ -1090,7 +1089,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Whether Docky's window hugs its content or stretches across the full dock axis.
-    @Published var windowAxisSizing: DockWindowAxisSizing {
+    var windowAxisSizing: DockWindowAxisSizing {
         didSet {
             guard windowAxisSizing != oldValue else { return }
             defaults.set(windowAxisSizing.rawValue, forKey: Keys.windowAxisSizing)
@@ -1098,7 +1097,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Whether hovering an expandable widget tile presents the expanded preview window.
-    @Published var enablesWidgetHoverPreview: Bool {
+    var enablesWidgetHoverPreview: Bool {
         didSet {
             guard enablesWidgetHoverPreview != oldValue else { return }
             defaults.set(enablesWidgetHoverPreview, forKey: Keys.enablesWidgetHoverPreview)
@@ -1106,7 +1105,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Tile spans for which the expanded hover preview is allowed to appear.
-    @Published var widgetHoverPreviewSpans: Set<TileSpan> {
+    var widgetHoverPreviewSpans: Set<TileSpan> {
         didSet {
             guard widgetHoverPreviewSpans != oldValue else { return }
             defaults.set(widgetHoverPreviewSpans.map(\.rawValue), forKey: Keys.widgetHoverPreviewSpans)
@@ -1114,7 +1113,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// How long the cursor must rest on a widget before its expanded preview appears. Zero = immediate.
-    @Published var widgetHoverPreviewDelay: TimeInterval {
+    var widgetHoverPreviewDelay: TimeInterval {
         didSet {
             let clampedValue = max(0, widgetHoverPreviewDelay)
             guard clampedValue != oldValue else {
@@ -1134,7 +1133,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Whether Docky shows the divider between pinned apps and unpinned running apps.
-    @Published var showsActivePinnedSeparator: Bool {
+    var showsActivePinnedSeparator: Bool {
         didSet {
             guard showsActivePinnedSeparator != oldValue else { return }
             defaults.set(showsActivePinnedSeparator, forKey: Keys.showsActivePinnedSeparator)
@@ -1142,7 +1141,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Whether Docky surfaces unpinned running apps. Disable to use Docky as a static shelf alongside the system Dock.
-    @Published var showsRunningApps: Bool {
+    var showsRunningApps: Bool {
         didSet {
             guard showsRunningApps != oldValue else { return }
             defaults.set(showsRunningApps, forKey: Keys.showsRunningApps)
@@ -1151,7 +1150,7 @@ final class DockyPreferences: ObservableObject {
 
     /// Behavior when clicking an app tile whose app is already frontmost with at least one
     /// visible window. `.none` is the default; `.cycleWindows` and `.minimizeAll` are pro-only.
-    @Published var appTileFrontmostClickBehavior: AppTileFrontmostClickBehavior {
+    var appTileFrontmostClickBehavior: AppTileFrontmostClickBehavior {
         didSet {
             guard appTileFrontmostClickBehavior != oldValue else { return }
             defaults.set(appTileFrontmostClickBehavior.rawValue, forKey: Keys.appTileFrontmostClickBehavior)
@@ -1159,7 +1158,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Whether Docky surfaces minimized window tiles in the trailing section.
-    @Published var showsMinimizedWindows: Bool {
+    var showsMinimizedWindows: Bool {
         didSet {
             guard showsMinimizedWindows != oldValue else { return }
             defaults.set(showsMinimizedWindows, forKey: Keys.showsMinimizedWindows)
@@ -1171,7 +1170,7 @@ final class DockyPreferences: ObservableObject {
     /// Default true — matches the system Dock and what existed before this
     /// preference was added. Turning it off keeps Docky pinned over
     /// fullscreen apps.
-    @Published var hidesDuringFullscreen: Bool {
+    var hidesDuringFullscreen: Bool {
         didSet {
             guard hidesDuringFullscreen != oldValue else { return }
             defaults.set(hidesDuringFullscreen, forKey: Keys.hidesDuringFullscreen)
@@ -1181,7 +1180,7 @@ final class DockyPreferences: ObservableObject {
     /// Shelve mode: hides Finder and Trash tiles so the dock reads as a
     /// pure shelf of pinned apps + widgets. Independent of recent-app
     /// suppression (`hidesRecentApps`).
-    @Published var enablesShelveMode: Bool {
+    var enablesShelveMode: Bool {
         didSet {
             guard enablesShelveMode != oldValue else { return }
             defaults.set(enablesShelveMode, forKey: Keys.enablesShelveMode)
@@ -1192,7 +1191,7 @@ final class DockyPreferences: ObservableObject {
     /// Equivalent to `showsRunningApps == false`; either being set hides
     /// them, so the user can disable recents from the dedicated toggle
     /// without flipping the broader "Show Running Apps" preference.
-    @Published var hidesRecentApps: Bool {
+    var hidesRecentApps: Bool {
         didSet {
             guard hidesRecentApps != oldValue else { return }
             defaults.set(hidesRecentApps, forKey: Keys.hidesRecentApps)
@@ -1200,7 +1199,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Shape used for the active app indicator.
-    @Published var activeIndicatorShape: DockTileIndicatorShape {
+    var activeIndicatorShape: DockTileIndicatorShape {
         didSet {
             guard activeIndicatorShape != oldValue else { return }
             defaults.set(activeIndicatorShape.rawValue, forKey: Keys.activeIndicatorShape)
@@ -1208,7 +1207,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Optional image path used for the custom active app indicator.
-    @Published var activeIndicatorImagePath: String? {
+    var activeIndicatorImagePath: String? {
         didSet {
             guard activeIndicatorImagePath != oldValue else { return }
 
@@ -1221,7 +1220,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Optional color override used for dot and pill active app indicators.
-    @Published var activeIndicatorColor: DockColor? {
+    var activeIndicatorColor: DockColor? {
         didSet {
             guard activeIndicatorColor != oldValue else { return }
             persistActiveIndicatorColor(activeIndicatorColor)
@@ -1229,7 +1228,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Optional image path used as the default divider image (applies to all dividers).
-    @Published var dividerImagePath: String? {
+    var dividerImagePath: String? {
         didSet {
             guard dividerImagePath != oldValue else { return }
 
@@ -1242,7 +1241,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Optional image path that overrides the global divider image for the leading section divider.
-    @Published var leftDividerImagePath: String? {
+    var leftDividerImagePath: String? {
         didSet {
             guard leftDividerImagePath != oldValue else { return }
 
@@ -1255,7 +1254,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Optional image path that overrides the global divider image for the trailing section divider.
-    @Published var rightDividerImagePath: String? {
+    var rightDividerImagePath: String? {
         didSet {
             guard rightDividerImagePath != oldValue else { return }
 
@@ -1268,7 +1267,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// When true, the trailing divider mirrors the leading divider's image instead of using its own override.
-    @Published var mirrorsLeftDividerOnRight: Bool {
+    var mirrorsLeftDividerOnRight: Bool {
         didSet {
             guard mirrorsLeftDividerOnRight != oldValue else { return }
             defaults.set(mirrorsLeftDividerOnRight, forKey: Keys.mirrorsLeftDividerOnRight)
@@ -1277,7 +1276,7 @@ final class DockyPreferences: ObservableObject {
 
     /// Extra inward offset applied to the active app indicator, in points.
     /// Positive values pull the indicator further from the screen edge.
-    @Published var activeIndicatorOffset: CGFloat {
+    var activeIndicatorOffset: CGFloat {
         didSet {
             guard activeIndicatorOffset != oldValue else { return }
             defaults.set(activeIndicatorOffset, forKey: Keys.activeIndicatorOffset)
@@ -1285,7 +1284,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Scale multiplier applied to the active app indicator's rendered size.
-    @Published var activeIndicatorScale: CGFloat {
+    var activeIndicatorScale: CGFloat {
         didSet {
             guard activeIndicatorScale != oldValue else { return }
             defaults.set(activeIndicatorScale, forKey: Keys.activeIndicatorScale)
@@ -1294,7 +1293,7 @@ final class DockyPreferences: ObservableObject {
 
     /// Fraction of the tile size used to inset the divider along its short axis.
     /// 0 produces an edge-to-edge divider; 0.25 matches the legacy default.
-    @Published var dividerPaddingFraction: CGFloat {
+    var dividerPaddingFraction: CGFloat {
         didSet {
             guard dividerPaddingFraction != oldValue else { return }
             defaults.set(dividerPaddingFraction, forKey: Keys.dividerPaddingFraction)
@@ -1302,7 +1301,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Scale multiplier applied to custom divider images.
-    @Published var dividerImageScale: CGFloat {
+    var dividerImageScale: CGFloat {
         didSet {
             guard dividerImageScale != oldValue else { return }
             defaults.set(dividerImageScale, forKey: Keys.dividerImageScale)
@@ -1311,7 +1310,7 @@ final class DockyPreferences: ObservableObject {
 
     /// Offset applied to dividers along the dock's main axis, in points.
     /// Positive shifts toward the dock's trailing direction.
-    @Published var dividerOffset: CGFloat {
+    var dividerOffset: CGFloat {
         didSet {
             guard dividerOffset != oldValue else { return }
             defaults.set(dividerOffset, forKey: Keys.dividerOffset)
@@ -1319,7 +1318,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Optional per-app icon overrides used by app tiles.
-    @Published var appIconOverrides: [AppIconOverride] {
+    var appIconOverrides: [AppIconOverride] {
         didSet {
             guard appIconOverrides != oldValue else { return }
             persistAppIconOverrides(appIconOverrides)
@@ -1327,7 +1326,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Optional icon overrides for the Trash tile, keyed by empty/full state.
-    @Published var trashIconOverrides: [TrashIconOverride] {
+    var trashIconOverrides: [TrashIconOverride] {
         didSet {
             guard trashIconOverrides != oldValue else { return }
             persistTrashIconOverrides(trashIconOverrides)
@@ -1335,7 +1334,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Optional per-folder icon overrides used by folder tiles, keyed by path.
-    @Published var folderIconOverrides: [FolderIconOverride] {
+    var folderIconOverrides: [FolderIconOverride] {
         didSet {
             guard folderIconOverrides != oldValue else { return }
             persistFolderIconOverrides(folderIconOverrides)
@@ -1343,7 +1342,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Optional image path used to replace the Launchpad tile's icon.
-    @Published var launchpadIconPath: String? {
+    var launchpadIconPath: String? {
         didSet {
             guard launchpadIconPath != oldValue else { return }
 
@@ -1357,7 +1356,7 @@ final class DockyPreferences: ObservableObject {
 
     /// Optional padding fraction applied around the Launchpad override icon.
     /// Persists as a Double under `launchpadIconPaddingFraction`.
-    @Published var launchpadIconPaddingFraction: CGFloat? {
+    var launchpadIconPaddingFraction: CGFloat? {
         didSet {
             guard launchpadIconPaddingFraction != oldValue else { return }
 
@@ -1370,7 +1369,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Bundle identifiers hidden from Docky's app tile surfaces.
-    @Published var hiddenAppBundleIdentifiers: [String] {
+    var hiddenAppBundleIdentifiers: [String] {
         didSet {
             let normalizedIdentifiers = Self.normalizedBundleIdentifiers(hiddenAppBundleIdentifiers)
             guard normalizedIdentifiers != oldValue else {
@@ -1390,7 +1389,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Whether opened apps from an app folder should appear grouped beside that folder.
-    @Published var showsGroupedOpenedAppsInDock: Bool {
+    var showsGroupedOpenedAppsInDock: Bool {
         didSet {
             guard showsGroupedOpenedAppsInDock != oldValue else { return }
             defaults.set(showsGroupedOpenedAppsInDock, forKey: Keys.showsGroupedOpenedAppsInDock)
@@ -1400,7 +1399,7 @@ final class DockyPreferences: ObservableObject {
     /// Whether the rounded backdrop should be drawn around the folder tile and
     /// its grouped opened apps. Independent of `showsGroupedOpenedAppsInDock`
     /// so users can keep the grouping without the visual halo.
-    @Published var showsGroupedOpenedAppsBackdrop: Bool {
+    var showsGroupedOpenedAppsBackdrop: Bool {
         didSet {
             guard showsGroupedOpenedAppsBackdrop != oldValue else { return }
             defaults.set(showsGroupedOpenedAppsBackdrop, forKey: Keys.showsGroupedOpenedAppsBackdrop)
@@ -1408,7 +1407,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Whether Docky's Launchpad overlay is enabled.
-    @Published var enablesLaunchpadOverlay: Bool {
+    var enablesLaunchpadOverlay: Bool {
         didSet {
             guard enablesLaunchpadOverlay != oldValue else { return }
             defaults.set(enablesLaunchpadOverlay, forKey: Keys.enablesLaunchpadOverlay)
@@ -1418,7 +1417,7 @@ final class DockyPreferences: ObservableObject {
     /// How transparent the Launchpad overlay's background tint is. `0` is
     /// fully opaque (heavy tint over the SkyLight blur); `1` is fully clear
     /// (only the live blur remains, no tint on top).
-    @Published var launchpadOverlayTransparency: CGFloat {
+    var launchpadOverlayTransparency: CGFloat {
         didSet {
             let clampedValue = min(max(launchpadOverlayTransparency, 0), 1)
             guard clampedValue != oldValue else {
@@ -1438,7 +1437,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Preferred column count for the Launchpad overlay grid.
-    @Published var launchpadGridColumnCount: Int {
+    var launchpadGridColumnCount: Int {
         didSet {
             let clampedValue = max(1, launchpadGridColumnCount)
             guard clampedValue != oldValue else {
@@ -1458,7 +1457,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Preferred row count for the Launchpad overlay grid.
-    @Published var launchpadGridRowCount: Int {
+    var launchpadGridRowCount: Int {
         didSet {
             let clampedValue = max(1, launchpadGridRowCount)
             guard clampedValue != oldValue else {
@@ -1478,7 +1477,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Global shortcut that toggles Docky's Launchpad overlay.
-    @Published var launchpadShortcut: KeyboardShortcut {
+    var launchpadShortcut: KeyboardShortcut {
         didSet {
             guard launchpadShortcut != oldValue else { return }
             persistLaunchpadShortcut(launchpadShortcut)
@@ -1486,7 +1485,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Whether Docky's window switcher is enabled.
-    @Published var enablesWindowSwitcher: Bool {
+    var enablesWindowSwitcher: Bool {
         didSet {
             guard enablesWindowSwitcher != oldValue else { return }
             defaults.set(enablesWindowSwitcher, forKey: Keys.enablesWindowSwitcher)
@@ -1494,7 +1493,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Global shortcut that opens Docky's window switcher.
-    @Published var windowSwitcherShortcut: KeyboardShortcut {
+    var windowSwitcherShortcut: KeyboardShortcut {
         didSet {
             guard windowSwitcherShortcut != oldValue else { return }
             persistWindowSwitcherShortcut(windowSwitcherShortcut)
@@ -1502,7 +1501,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Whether the window switcher should preview the selected window in place after a short hold.
-    @Published var showsWindowSwitcherFocusPreview: Bool {
+    var showsWindowSwitcherFocusPreview: Bool {
         didSet {
             guard showsWindowSwitcherFocusPreview != oldValue else { return }
             defaults.set(showsWindowSwitcherFocusPreview, forKey: Keys.showsWindowSwitcherFocusPreview)
@@ -1510,7 +1509,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Which behavior Docky's window switcher should use when previewing the selected window.
-    @Published var windowSwitcherPreviewMode: WindowSwitcherPreviewMode {
+    var windowSwitcherPreviewMode: WindowSwitcherPreviewMode {
         didSet {
             guard windowSwitcherPreviewMode != oldValue else { return }
             defaults.set(windowSwitcherPreviewMode.rawValue, forKey: Keys.windowSwitcherPreviewMode)
@@ -1520,7 +1519,7 @@ final class DockyPreferences: ObservableObject {
     /// Layout for the window switcher overlay. `.auto` resolves to `.list` when
     /// screen-recording permission is missing (so users without thumbnails get a
     /// usable switcher) and `.thumbnails` otherwise.
-    @Published var windowSwitcherLayout: WindowSwitcherLayout {
+    var windowSwitcherLayout: WindowSwitcherLayout {
         didSet {
             guard windowSwitcherLayout != oldValue else { return }
             defaults.set(windowSwitcherLayout.rawValue, forKey: Keys.windowSwitcherLayout)
@@ -1528,7 +1527,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Docky-owned ordered pinned app bundle identifiers.
-    @Published var pinnedAppBundleIdentifiers: [String] {
+    var pinnedAppBundleIdentifiers: [String] {
         didSet {
             guard pinnedAppBundleIdentifiers != oldValue else { return }
             defaults.set(pinnedAppBundleIdentifiers, forKey: Keys.pinnedAppBundleIdentifiers)
@@ -1536,7 +1535,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Docky-owned ordered pinned section items.
-    @Published var pinnedItems: [PinnedTileItem] {
+    var pinnedItems: [PinnedTileItem] {
         didSet {
             guard pinnedItems != oldValue else { return }
             persistPinnedItems(pinnedItems)
@@ -1551,7 +1550,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Enabled widgets grouped by the app tile they extend.
-    @Published var widgetPlacements: [WidgetPlacement] {
+    var widgetPlacements: [WidgetPlacement] {
         didSet {
             guard widgetPlacements != oldValue else { return }
             persistWidgetPlacements(widgetPlacements)
@@ -1559,7 +1558,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Optional widget substitutions for app tiles.
-    @Published var appWidgetDisplays: [AppWidgetDisplay] {
+    var appWidgetDisplays: [AppWidgetDisplay] {
         didSet {
             guard appWidgetDisplays != oldValue else { return }
             persistAppWidgetDisplays(appWidgetDisplays)
@@ -1567,7 +1566,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Docky-owned ordered folder/trash section items.
-    @Published var trailingItems: [TrailingTileItem] {
+    var trailingItems: [TrailingTileItem] {
         didSet {
             guard trailingItems != oldValue else { return }
             persistTrailingItems(trailingItems)
@@ -1575,7 +1574,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Whether Docky has already shown the divider edit hint chip.
-    @Published var hasSeenDockEditorHint: Bool {
+    var hasSeenDockEditorHint: Bool {
         didSet {
             guard hasSeenDockEditorHint != oldValue else { return }
             defaults.set(hasSeenDockEditorHint, forKey: Keys.hasSeenDockEditorHint)

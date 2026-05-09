@@ -15,7 +15,7 @@ struct TileContainerView: View {
     @ObservedObject private var store = TileStore.shared
     @ObservedObject private var dockSettings = DockSettingsService.shared
     @ObservedObject private var layout = DockLayoutService.shared
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var editMode = DockEditModeService.shared
     @ObservedObject private var product = ProductService.shared
     @ObservedObject private var dockDrag = DockDragService.shared

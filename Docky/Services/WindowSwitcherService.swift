@@ -217,49 +217,29 @@ final class WindowSwitcherService: ObservableObject {
     }
 
     private func subscribeToPreferences() {
-        DockyPreferences.shared.$windowSwitcherShortcut
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] shortcut in
-                self?.registerHotKey(shortcut: shortcut)
+        observeChanges { [weak self] in
+            let shortcut = DockyPreferences.shared.windowSwitcherShortcut
+            self?.registerHotKey(shortcut: shortcut)
+        }
+        .store(in: &cancellables)
+
+        observeChanges { [weak self] in
+            let isEnabled = DockyPreferences.shared.enablesWindowSwitcher
+            guard let self else { return }
+            self.registerHotKey(shortcut: DockyPreferences.shared.windowSwitcherShortcut)
+            if !isEnabled {
+                self.dismiss()
             }
-            .store(in: &cancellables)
+        }
+        .store(in: &cancellables)
 
-        DockyPreferences.shared.$enablesWindowSwitcher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isEnabled in
-                guard let self else { return }
-
-                self.registerHotKey(shortcut: DockyPreferences.shared.windowSwitcherShortcut)
-                if !isEnabled {
-                    self.dismiss()
-                }
-            }
-            .store(in: &cancellables)
-
-        DockyPreferences.shared.$showsWindowSwitcherFocusPreview
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
-
-                self.refreshSelectionPresentation()
-            }
-            .store(in: &cancellables)
-
-        DockyPreferences.shared.$windowSwitcherPreviewMode
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
-
-                self.refreshSelectionPresentation()
-            }
-            .store(in: &cancellables)
-
-        DockyPreferences.shared.$windowSwitcherLayout
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.refreshSelectionPresentation()
-            }
-            .store(in: &cancellables)
+        observeChanges { [weak self] in
+            _ = DockyPreferences.shared.showsWindowSwitcherFocusPreview
+            _ = DockyPreferences.shared.windowSwitcherPreviewMode
+            _ = DockyPreferences.shared.windowSwitcherLayout
+            self?.refreshSelectionPresentation()
+        }
+        .store(in: &cancellables)
 
         PermissionsService.shared.$screenCapture
             .removeDuplicates()

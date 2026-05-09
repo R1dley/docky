@@ -203,17 +203,16 @@ final class MainWindow: NSPanel {
     }
 
     private func observeFrameInputs() {
+        // DockyPreferences is now `@Observable` so we read its
+        // properties through `observeChanges` (Observation framework
+        // auto-tracks). DockSettingsService / DockDragService /
+        // DockEditModeService are still ObservableObject; their
+        // `@Published` projections are merged via Combine below.
         let layoutSignals: [AnyPublisher<Void, Never>] = [
             dockSettings.$orientation.map { _ in () }.eraseToAnyPublisher(),
             dockSettings.$tileSize.map { _ in () }.eraseToAnyPublisher(),
             dockSettings.$largeSize.map { _ in () }.eraseToAnyPublisher(),
             dockSettings.$magnification.map { _ in () }.eraseToAnyPublisher(),
-            preferences.$tileVerticalPadding.map { _ in () }.eraseToAnyPublisher(),
-            preferences.$tileSpacing.map { _ in () }.eraseToAnyPublisher(),
-            preferences.$overflowBehavior.map { _ in () }.eraseToAnyPublisher(),
-            preferences.$windowAxisSizing.map { _ in () }.eraseToAnyPublisher(),
-            preferences.$windowPosition.map { _ in () }.eraseToAnyPublisher(),
-            preferences.$windowDisplayTarget.map { _ in () }.eraseToAnyPublisher(),
             editMode.$paletteDrag.map { _ in () }.eraseToAnyPublisher(),
             editMode.$paletteDropDestination.map { _ in () }.eraseToAnyPublisher(),
             DockDragService.shared.$kind.map { _ in () }.eraseToAnyPublisher(),
@@ -225,6 +224,21 @@ final class MainWindow: NSPanel {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.applyCurrentFrame(animated: true, duration: self?.tileMutationAnimationDuration) }
             .store(in: &cancellables)
+
+        observeChanges { [weak self] in
+            guard let self else { return }
+            // Touch every preference that drives frame layout — the
+            // Observation framework tracks these reads and re-runs the
+            // closure on any change.
+            _ = preferences.tileVerticalPadding
+            _ = preferences.tileSpacing
+            _ = preferences.overflowBehavior
+            _ = preferences.windowAxisSizing
+            _ = preferences.windowPosition
+            _ = preferences.windowDisplayTarget
+            self.applyCurrentFrame(animated: true, duration: self.tileMutationAnimationDuration)
+        }
+        .store(in: &cancellables)
 
         tileStore.$tiles
             .removeDuplicates()
@@ -280,21 +294,19 @@ final class MainWindow: NSPanel {
     }
 
     private func observeWindowPlacementInputs() {
-        preferences.$windowSpaceBehavior
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.applyCollectionBehavior()
-            }
-            .store(in: &cancellables)
+        observeChanges { [weak self] in
+            _ = DockyPreferences.shared.windowSpaceBehavior
+            self?.applyCollectionBehavior()
+        }
+        .store(in: &cancellables)
 
-        preferences.$windowDisplayTarget
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.lastPointerScreenFrame = nil
-                self?.updatePointerScreenMonitoring()
-                self?.updateFullscreenStateAndApply(animated: true)
-            }
-            .store(in: &cancellables)
+        observeChanges { [weak self] in
+            _ = DockyPreferences.shared.windowDisplayTarget
+            self?.lastPointerScreenFrame = nil
+            self?.updatePointerScreenMonitoring()
+            self?.updateFullscreenStateAndApply(animated: true)
+        }
+        .store(in: &cancellables)
 
         PermissionsService.shared.$accessibility
             .removeDuplicates()
@@ -318,26 +330,18 @@ final class MainWindow: NSPanel {
     }
 
     private func observeVisibilityInputs() {
-        preferences.$autohidesWindow
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.applyEffectiveVisibility(animated: true)
-            }
-            .store(in: &cancellables)
+        observeChanges { [weak self] in
+            _ = DockyPreferences.shared.autohidesWindow
+            self?.applyEffectiveVisibility(animated: true)
+        }
+        .store(in: &cancellables)
 
-        preferences.$maximizedWindowBehavior
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.updateFullscreenStateAndApply(animated: true)
-            }
-            .store(in: &cancellables)
-
-        preferences.$hidesDuringFullscreen
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.updateFullscreenStateAndApply(animated: true)
-            }
-            .store(in: &cancellables)
+        observeChanges { [weak self] in
+            _ = DockyPreferences.shared.maximizedWindowBehavior
+            _ = DockyPreferences.shared.hidesDuringFullscreen
+            self?.updateFullscreenStateAndApply(animated: true)
+        }
+        .store(in: &cancellables)
     }
 
     private func applyCollectionBehavior() {

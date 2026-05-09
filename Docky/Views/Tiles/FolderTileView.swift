@@ -11,7 +11,7 @@ struct FolderTileView: View {
     let isOpen: Bool
     @ObservedObject private var permissions = PermissionsService.shared
     @ObservedObject private var folderAccess = FolderAccessService.shared
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @State private var preview: [URL] = []
 
     var body: some View {

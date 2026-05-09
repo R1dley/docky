@@ -30,24 +30,21 @@ final class LaunchpadHotKeyService {
     }
 
     private func subscribeToPreferences() {
-        DockyPreferences.shared.$launchpadShortcut
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] shortcut in
-                self?.registerHotKey(shortcut: shortcut)
-            }
-            .store(in: &cancellables)
+        observeChanges { [weak self] in
+            let shortcut = DockyPreferences.shared.launchpadShortcut
+            self?.registerHotKey(shortcut: shortcut)
+        }
+        .store(in: &cancellables)
 
-        DockyPreferences.shared.$enablesLaunchpadOverlay
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isEnabled in
-                guard let self else { return }
-
-                self.registerHotKey(shortcut: DockyPreferences.shared.launchpadShortcut)
-                if !isEnabled {
-                    LaunchpadOverlayService.shared.dismiss()
-                }
+        observeChanges { [weak self] in
+            let isEnabled = DockyPreferences.shared.enablesLaunchpadOverlay
+            guard let self else { return }
+            self.registerHotKey(shortcut: DockyPreferences.shared.launchpadShortcut)
+            if !isEnabled {
+                LaunchpadOverlayService.shared.dismiss()
             }
-            .store(in: &cancellables)
+        }
+        .store(in: &cancellables)
 
         ProductService.shared.$currentTier
             .receive(on: DispatchQueue.main)

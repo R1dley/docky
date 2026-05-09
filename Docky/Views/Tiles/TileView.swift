@@ -18,7 +18,7 @@ struct TileView: View {
     let isAppFolderDropTarget: Bool
     @ObservedObject private var dockSettings = DockSettingsService.shared
     @ObservedObject private var layout = DockLayoutService.shared
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var product = ProductService.shared
     @ObservedObject private var workspace = WorkspaceService.shared
     @ObservedObject private var mediaPlayback = MediaPlaybackService.shared
@@ -56,7 +56,7 @@ struct TileView: View {
         self.isAppFolderDropTarget = isAppFolderDropTarget
         self._dockSettings = ObservedObject(wrappedValue: DockSettingsService.shared)
         self._layout = ObservedObject(wrappedValue: DockLayoutService.shared)
-        self._preferences = ObservedObject(wrappedValue: DockyPreferences.shared)
+        self._preferences = Bindable(wrappedValue: DockyPreferences.shared)
         self._product = ObservedObject(wrappedValue: ProductService.shared)
         self._workspace = ObservedObject(wrappedValue: WorkspaceService.shared)
         self._mediaPlayback = ObservedObject(wrappedValue: MediaPlaybackService.shared)

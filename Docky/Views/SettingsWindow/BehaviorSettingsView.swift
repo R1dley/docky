@@ -18,7 +18,7 @@ struct BehaviorSettingsView: View {
 
     let subsection: Subsection
 
-    @ObservedObject private var preferences = DockyPreferences.shared
+    @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var product = ProductService.shared
 
     var body: some View {
