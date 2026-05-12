@@ -226,17 +226,28 @@ private struct LaunchpadOverlayView: View {
     private let searchBarTopInset: CGFloat = 56
     private let searchBarHeight: CGFloat = 56
     private let columnSpacing: CGFloat = 48
-    private let rowSpacing: CGFloat = 32
+    /// Minimum inter-row spacing. The actual spacing grows past this when
+    /// the configured rows don't fill the available height, so the grid
+    /// stretches vertically to fit the chrome.
+    private let minRowSpacing: CGFloat = 32
     private let horizontalInset: CGFloat = 80
-    private let bottomInset: CGFloat = 56
+    /// Padding between the grid edge and the surrounding chrome — applied
+    /// both below the search bar and above the page indicator so the grid
+    /// sits visually balanced between the two.
+    private let gridChromePadding: CGFloat = 56
+    private let pageIndicatorBottomInset: CGFloat = 24
+    /// Visual height occupied by the page-indicator dot row: each dot is
+    /// 7pt with 8pt of tap-target padding on every side (7 + 16 = 23).
+    private let pageIndicatorVisualHeight: CGFloat = 23
     private let wallpaperBlurRadius: CGFloat = 50
     /// Reference logical screen height the launchpad metrics are tuned
     /// for (1440p): at this height, icons render at exactly `baseIconSize`
     /// and gaps at the configured `columnSpacing` / `rowSpacing` values.
     /// Taller or shorter screens scale linearly off this baseline.
     private let referenceScreenHeight: CGFloat = 1440
-    /// Icon edge length at the reference screen height. Icons at other
-    /// heights are `baseIconSize × (screenHeight / referenceScreenHeight)`.
+    /// Icon edge length at the reference screen height. Doubles as the
+    /// hard upper bound — the screen-derived scale is clamped to 1.0 so
+    /// icons never grow past this size on very tall displays.
     private let baseIconSize: CGFloat = 128
     /// Reference label height below the icon, scaled with the icon.
     private let baseLabelHeight: CGFloat = 22
@@ -247,16 +258,20 @@ private struct LaunchpadOverlayView: View {
         #endif
 
         GeometryReader { proxy in
-            let topInset = searchBarTopInset + searchBarHeight + 56
+            let topInset = searchBarTopInset + searchBarHeight + gridChromePadding
+            // Mirror the top so the gap from the grid bottom to the page
+            // indicator equals the gap from the search bar to the grid top.
+            let bottomInset = pageIndicatorBottomInset + pageIndicatorVisualHeight + gridChromePadding
             // Linear scale off the 1440p reference (screen *height*).
-            // Clamped so very small or very large displays don't blow up
-            // the cell math.
-            let scale = max(0.5, min(2.5, proxy.size.height / referenceScreenHeight))
+            // Clamped at 1.0 so icons never exceed `baseIconSize`, and at
+            // 0.5 so very small displays don't shrink the cell math
+            // beyond legibility.
+            let scale = max(0.5, min(1.0, proxy.size.height / referenceScreenHeight))
             let iconSize = baseIconSize * scale
             let labelHeight = baseLabelHeight * scale
             let cellSpacing = iconSize * 0.04
             let scaledColumnSpacing = columnSpacing * scale
-            let scaledRowSpacing = rowSpacing * scale
+            let scaledMinRowSpacing = minRowSpacing * scale
             let scaledHorizontalInset = horizontalInset * scale
             let cellWidth = iconSize
             let cellHeight = iconSize + labelHeight + cellSpacing
@@ -267,11 +282,19 @@ private struct LaunchpadOverlayView: View {
             let configuredColumns = max(1, preferences.launchpadGridColumnCount)
             let configuredRows = max(1, preferences.launchpadGridRowCount)
             let maxColumnsThatFit = max(1, Int((usableWidth + scaledColumnSpacing) / (cellWidth + scaledColumnSpacing)))
-            let maxRowsThatFit = max(1, Int((usableHeight + scaledRowSpacing) / (cellHeight + scaledRowSpacing)))
+            let maxRowsThatFit = max(1, Int((usableHeight + scaledMinRowSpacing) / (cellHeight + scaledMinRowSpacing)))
             let pageColumns = max(1, min(configuredColumns, maxColumnsThatFit))
             // Honor the configured row count, but never exceed what fits
             // on screen — otherwise rows would overflow the page.
             let pageRows = max(1, min(configuredRows, maxRowsThatFit))
+            // Stretch the grid to fill `usableHeight`: distribute any
+            // leftover vertical space across the inter-row gaps. The min
+            // is the floor, so when the configured rows already fill the
+            // height, spacing stays at the floor.
+            let extraVertical = max(0, usableHeight - cellHeight * CGFloat(pageRows))
+            let scaledRowSpacing = pageRows > 1
+                ? max(scaledMinRowSpacing, extraVertical / CGFloat(pageRows - 1))
+                : scaledMinRowSpacing
             let pageSize = pageColumns * pageRows
             let pages = paginate(filteredEntries, pageSize: pageSize)
 
@@ -332,7 +355,7 @@ private struct LaunchpadOverlayView: View {
                     pageIndicator(pageCount: pages.count, currentIndex: currentPageIndex(in: pages)) { index in
                         scrollToPage(index: index, pageCount: pages.count)
                     }
-                    .padding(.bottom, 24)
+                    .padding(.bottom, pageIndicatorBottomInset)
                 }
 
                 pageNavigationChevrons(pageCount: pages.count, currentIndex: currentPageIndex(in: pages))
