@@ -230,8 +230,8 @@ final class MainWindow: NSPanel {
             // Touch every preference that drives frame layout — the
             // Observation framework tracks these reads and re-runs the
             // closure on any change.
-            _ = preferences.tileVerticalPadding
-            _ = preferences.tileSpacing
+            _ = preferences.effectiveTileVerticalPadding
+            _ = preferences.effectiveTileSpacing
             _ = preferences.overflowBehavior
             _ = preferences.windowAxisSizing
             _ = preferences.windowPosition
@@ -519,7 +519,7 @@ final class MainWindow: NSPanel {
         let contentPadding = MainWindowContainerView.contentPadding
         let position = preferences.windowPosition.resolved(systemOrientation: dockSettings.orientation)
         let baseTileSize = dockSettings.displayTileSize
-        let baseTileHeight = baseTileSize + preferences.tileVerticalPadding * 2
+        let baseTileHeight = baseTileSize + preferences.effectiveTileVerticalPadding * 2
         let externalAppDropPreview: AppTile? = {
             if case let .app(_, tile) = DockDragService.shared.kind { return tile }
             return nil
@@ -547,7 +547,7 @@ final class MainWindow: NSPanel {
             tiles: sizingTiles,
             tileSize: baseTileSize,
             tileHeight: baseTileHeight,
-            tileSpacing: preferences.tileSpacing,
+            tileSpacing: preferences.effectiveTileSpacing,
             position: position
         )
         let unreservedAvailableAxisLength = max(
@@ -575,7 +575,7 @@ final class MainWindow: NSPanel {
             tiles: sizingTiles,
             tileSize: baseTileSize,
             tileHeight: baseTileHeight,
-            tileSpacing: preferences.tileSpacing,
+            tileSpacing: preferences.effectiveTileSpacing,
             position: position,
             compactWidgets: compactsWidgetsForOverflow
         )
@@ -588,8 +588,8 @@ final class MainWindow: NSPanel {
         layout.setCompactsWidgetsForOverflow(compactsWidgetsForOverflow)
 
         let scaledTileSize = baseTileSize * contentScale
-        let scaledTileHeight = scaledTileSize + (preferences.tileVerticalPadding * contentScale * 2)
-        let scaledTileSpacing = preferences.tileSpacing * contentScale
+        let scaledTileHeight = scaledTileSize + (preferences.effectiveTileVerticalPadding * contentScale * 2)
+        let scaledTileSpacing = preferences.effectiveTileSpacing * contentScale
         let displayedContentSize = TileContainerView.contentSize(
             tiles: sizingTiles,
             tileSize: scaledTileSize,

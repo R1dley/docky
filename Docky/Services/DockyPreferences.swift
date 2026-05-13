@@ -847,12 +847,98 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
 @Observable final class DockyPreferences {
     static let shared = DockyPreferences()
 
+    /// Set of `Keys.*` strings the user has explicitly customized. Each
+    /// appearance setter inserts its key; setters that clear a value
+    /// (e.g. setting `windowTintColor` back to `nil`) remove it.
+    ///
+    /// This is the predicate the theme override layer uses: when a key
+    /// is *not* in this set, `effective<X>` reads fall through to the
+    /// active theme's manifest, then the built-in default. When the
+    /// key *is* in this set, the user's explicit value wins.
+    ///
+    /// Persisted to `UserDefaults` so override status survives relaunch.
+    /// Populated on first launch via the migration in `init` (any key
+    /// already present in `UserDefaults` at upgrade time is treated as
+    /// user-overridden — better to over-respect existing customizations
+    /// than to let a theme silently replace them).
+    var userOverriddenAppearanceKeys: Set<String> = []
+
+    /// All preference keys that participate in the theme override
+    /// layer (i.e. the appearance subset). Used by `init` migration
+    /// and by `clearAllAppearanceOverrides()`.
+    static let appearanceKeys: Set<String> = [
+        Keys.disablesGlassLook,
+        Keys.tileVerticalPadding,
+        Keys.tileSpacing,
+        Keys.tileClipShape,
+        Keys.windowCornerRadius,
+        Keys.windowClipShape,
+        Keys.windowTintColor,
+        Keys.windowTintOpacity,
+        Keys.windowBackgroundImagePath,
+        Keys.windowBackgroundImageMode,
+        Keys.activeIndicatorShape,
+        Keys.activeIndicatorImagePath,
+        Keys.activeIndicatorColor,
+        Keys.activeIndicatorOffset,
+        Keys.activeIndicatorScale,
+        Keys.dividerImagePath,
+        Keys.leftDividerImagePath,
+        Keys.rightDividerImagePath,
+        Keys.mirrorsLeftDividerOnRight,
+        Keys.dividerPaddingFraction,
+        Keys.dividerImageScale,
+        Keys.dividerOffset,
+    ]
+
+    /// Whether the user has an explicit override for this preference
+    /// key. Used by Settings UI to show an "override / theme value"
+    /// affordance, and by `effective<X>` accessors to decide which
+    /// value to return.
+    func isAppearanceOverridden(_ key: String) -> Bool {
+        userOverriddenAppearanceKeys.contains(key)
+    }
+
+    /// Marks an appearance key as user-overridden. Idempotent.
+    /// Called from every appearance setter alongside the persist write.
+    fileprivate func markAppearanceOverride(_ key: String) {
+        guard !userOverriddenAppearanceKeys.contains(key) else { return }
+        userOverriddenAppearanceKeys.insert(key)
+        persistUserOverriddenAppearanceKeys()
+    }
+
+    /// Clears the override flag for a single appearance key. The
+    /// stored value is left untouched — `effective<X>` simply starts
+    /// preferring the theme value (or built-in default). Used by the
+    /// Settings UI "revert to theme" affordance.
+    func clearAppearanceOverride(_ key: String) {
+        guard userOverriddenAppearanceKeys.contains(key) else { return }
+        userOverriddenAppearanceKeys.remove(key)
+        persistUserOverriddenAppearanceKeys()
+    }
+
+    /// Clears every appearance override. Used by the "use theme as-is"
+    /// flow and by `resetAppearanceToDefaults()`.
+    func clearAllAppearanceOverrides() {
+        guard !userOverriddenAppearanceKeys.isEmpty else { return }
+        userOverriddenAppearanceKeys.removeAll()
+        persistUserOverriddenAppearanceKeys()
+    }
+
+    private func persistUserOverriddenAppearanceKeys() {
+        defaults.set(
+            Array(userOverriddenAppearanceKeys),
+            forKey: Keys.userOverriddenAppearanceKeys
+        )
+    }
+
     /// Padding applied inside each dock tile above and below the icon content.
     /// Total window height becomes `iconHeight + tileVerticalPadding * 2`.
     var tileVerticalPadding: CGFloat {
         didSet {
             guard tileVerticalPadding != oldValue else { return }
             defaults.set(Double(tileVerticalPadding), forKey: Keys.tileVerticalPadding)
+            markAppearanceOverride(Keys.tileVerticalPadding)
         }
     }
 
@@ -861,6 +947,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard tileSpacing != oldValue else { return }
             defaults.set(Double(tileSpacing), forKey: Keys.tileSpacing)
+            markAppearanceOverride(Keys.tileSpacing)
         }
     }
 
@@ -869,6 +956,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard tileClipShape != oldValue else { return }
             defaults.set(tileClipShape.rawValue, forKey: Keys.tileClipShape)
+            markAppearanceOverride(Keys.tileClipShape)
         }
     }
 
@@ -877,6 +965,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard windowCornerRadius != oldValue else { return }
             defaults.set(Double(windowCornerRadius), forKey: Keys.windowCornerRadius)
+            markAppearanceOverride(Keys.windowCornerRadius)
         }
     }
 
@@ -885,6 +974,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard windowClipShape != oldValue else { return }
             defaults.set(windowClipShape.rawValue, forKey: Keys.windowClipShape)
+            markAppearanceOverride(Keys.windowClipShape)
         }
     }
 
@@ -893,6 +983,11 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard windowTintColor != oldValue else { return }
             persistWindowTintColor(windowTintColor)
+            if windowTintColor == nil {
+                clearAppearanceOverride(Keys.windowTintColor)
+            } else {
+                markAppearanceOverride(Keys.windowTintColor)
+            }
         }
     }
 
@@ -901,6 +996,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard windowTintOpacity != oldValue else { return }
             defaults.set(Double(windowTintOpacity), forKey: Keys.windowTintOpacity)
+            markAppearanceOverride(Keys.windowTintOpacity)
         }
     }
 
@@ -909,6 +1005,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard disablesGlassLook != oldValue else { return }
             defaults.set(disablesGlassLook, forKey: Keys.disablesGlassLook)
+            markAppearanceOverride(Keys.disablesGlassLook)
         }
     }
 
@@ -919,8 +1016,10 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
 
             if let windowBackgroundImagePath, !windowBackgroundImagePath.isEmpty {
                 defaults.set(windowBackgroundImagePath, forKey: Keys.windowBackgroundImagePath)
+                markAppearanceOverride(Keys.windowBackgroundImagePath)
             } else {
                 defaults.removeObject(forKey: Keys.windowBackgroundImagePath)
+                clearAppearanceOverride(Keys.windowBackgroundImagePath)
             }
         }
     }
@@ -932,6 +1031,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard windowBackgroundImageMode != oldValue else { return }
             defaults.set(windowBackgroundImageMode.rawValue, forKey: Keys.windowBackgroundImageMode)
+            markAppearanceOverride(Keys.windowBackgroundImageMode)
         }
     }
 
@@ -1203,6 +1303,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard activeIndicatorShape != oldValue else { return }
             defaults.set(activeIndicatorShape.rawValue, forKey: Keys.activeIndicatorShape)
+            markAppearanceOverride(Keys.activeIndicatorShape)
         }
     }
 
@@ -1213,8 +1314,10 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
 
             if let activeIndicatorImagePath, !activeIndicatorImagePath.isEmpty {
                 defaults.set(activeIndicatorImagePath, forKey: Keys.activeIndicatorImagePath)
+                markAppearanceOverride(Keys.activeIndicatorImagePath)
             } else {
                 defaults.removeObject(forKey: Keys.activeIndicatorImagePath)
+                clearAppearanceOverride(Keys.activeIndicatorImagePath)
             }
         }
     }
@@ -1224,6 +1327,11 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard activeIndicatorColor != oldValue else { return }
             persistActiveIndicatorColor(activeIndicatorColor)
+            if activeIndicatorColor == nil {
+                clearAppearanceOverride(Keys.activeIndicatorColor)
+            } else {
+                markAppearanceOverride(Keys.activeIndicatorColor)
+            }
         }
     }
 
@@ -1234,8 +1342,10 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
 
             if let dividerImagePath, !dividerImagePath.isEmpty {
                 defaults.set(dividerImagePath, forKey: Keys.dividerImagePath)
+                markAppearanceOverride(Keys.dividerImagePath)
             } else {
                 defaults.removeObject(forKey: Keys.dividerImagePath)
+                clearAppearanceOverride(Keys.dividerImagePath)
             }
         }
     }
@@ -1247,8 +1357,10 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
 
             if let leftDividerImagePath, !leftDividerImagePath.isEmpty {
                 defaults.set(leftDividerImagePath, forKey: Keys.leftDividerImagePath)
+                markAppearanceOverride(Keys.leftDividerImagePath)
             } else {
                 defaults.removeObject(forKey: Keys.leftDividerImagePath)
+                clearAppearanceOverride(Keys.leftDividerImagePath)
             }
         }
     }
@@ -1260,8 +1372,10 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
 
             if let rightDividerImagePath, !rightDividerImagePath.isEmpty {
                 defaults.set(rightDividerImagePath, forKey: Keys.rightDividerImagePath)
+                markAppearanceOverride(Keys.rightDividerImagePath)
             } else {
                 defaults.removeObject(forKey: Keys.rightDividerImagePath)
+                clearAppearanceOverride(Keys.rightDividerImagePath)
             }
         }
     }
@@ -1271,6 +1385,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard mirrorsLeftDividerOnRight != oldValue else { return }
             defaults.set(mirrorsLeftDividerOnRight, forKey: Keys.mirrorsLeftDividerOnRight)
+            markAppearanceOverride(Keys.mirrorsLeftDividerOnRight)
         }
     }
 
@@ -1280,6 +1395,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard activeIndicatorOffset != oldValue else { return }
             defaults.set(activeIndicatorOffset, forKey: Keys.activeIndicatorOffset)
+            markAppearanceOverride(Keys.activeIndicatorOffset)
         }
     }
 
@@ -1288,6 +1404,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard activeIndicatorScale != oldValue else { return }
             defaults.set(activeIndicatorScale, forKey: Keys.activeIndicatorScale)
+            markAppearanceOverride(Keys.activeIndicatorScale)
         }
     }
 
@@ -1297,6 +1414,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard dividerPaddingFraction != oldValue else { return }
             defaults.set(dividerPaddingFraction, forKey: Keys.dividerPaddingFraction)
+            markAppearanceOverride(Keys.dividerPaddingFraction)
         }
     }
 
@@ -1305,6 +1423,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard dividerImageScale != oldValue else { return }
             defaults.set(dividerImageScale, forKey: Keys.dividerImageScale)
+            markAppearanceOverride(Keys.dividerImageScale)
         }
     }
 
@@ -1314,6 +1433,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard dividerOffset != oldValue else { return }
             defaults.set(dividerOffset, forKey: Keys.dividerOffset)
+            markAppearanceOverride(Keys.dividerOffset)
         }
     }
 
@@ -1586,56 +1706,227 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
     private let decoder = JSONDecoder()
     private var isSyncingOpenAtLoginPreference = false
 
-    var effectiveWindowTintColor: NSColor {
-        windowTintColor?.nsColor ?? Self.defaultWindowTintColor
+    // MARK: - Effective appearance values (theme override layer)
+    //
+    // Each `effective<X>` accessor returns `userValue` when
+    // `isAppearanceOverridden(Keys.X)` is true, otherwise falls
+    // through to the active theme's manifest value (if any), then
+    // finally to the raw stored value (which is initialized to the
+    // built-in default when the key isn't in UserDefaults).
+    //
+    // Consumers in `Views/` should read `effective<X>` rather than
+    // the raw stored property. Settings UI is the exception — its
+    // sliders/pickers bind to the raw stored property so the user
+    // sees and edits their own value, not the theme's.
+
+    /// Returns `raw` when the user has overridden this key, otherwise
+    /// the supplied theme value (when present), otherwise `raw` again
+    /// (which equals the built-in default when no override exists).
+    private func appearanceOverride<T>(_ key: String, raw: T, themed: T?) -> T {
+        if isAppearanceOverridden(key) { return raw }
+        return themed ?? raw
     }
 
-    var effectiveActiveIndicatorColor: NSColor {
-        activeIndicatorColor?.nsColor ?? .labelColor
+    var effectiveTileVerticalPadding: CGFloat {
+        appearanceOverride(
+            Keys.tileVerticalPadding,
+            raw: tileVerticalPadding,
+            themed: ThemeManager.shared.activeManifest?.appearance.tile?.verticalPadding
+        )
+    }
+
+    var effectiveTileSpacing: CGFloat {
+        appearanceOverride(
+            Keys.tileSpacing,
+            raw: tileSpacing,
+            themed: ThemeManager.shared.activeManifest?.appearance.tile?.spacing
+        )
+    }
+
+    var effectiveTileClipShape: DockClipShape {
+        let themed = ThemeManager.shared.activeManifest?.appearance.tile?.clipShape
+            .flatMap(DockClipShape.init(rawValue:))
+        return appearanceOverride(Keys.tileClipShape, raw: tileClipShape, themed: themed)
+    }
+
+    var effectiveWindowCornerRadius: CGFloat {
+        appearanceOverride(
+            Keys.windowCornerRadius,
+            raw: windowCornerRadius,
+            themed: ThemeManager.shared.activeManifest?.appearance.window?.cornerRadius
+        )
+    }
+
+    var effectiveWindowClipShape: DockClipShape {
+        let themed = ThemeManager.shared.activeManifest?.appearance.window?.clipShape
+            .flatMap(DockClipShape.init(rawValue:))
+        return appearanceOverride(Keys.windowClipShape, raw: windowClipShape, themed: themed)
+    }
+
+    var effectiveWindowTintColor: NSColor {
+        if isAppearanceOverridden(Keys.windowTintColor), let user = windowTintColor {
+            return user.nsColor
+        }
+        if let themed = ThemeManager.shared.activeManifest?.appearance.window?.tintColor {
+            return themed.dockColor.nsColor
+        }
+        return Self.defaultWindowTintColor
     }
 
     var effectiveWindowTintOpacity: CGFloat {
-        min(max(windowTintOpacity, 0), 1)
+        let raw = appearanceOverride(
+            Keys.windowTintOpacity,
+            raw: windowTintOpacity,
+            themed: ThemeManager.shared.activeManifest?.appearance.window?.tintOpacity
+        )
+        return min(max(raw, 0), 1)
+    }
+
+    var effectiveDisablesGlassLook: Bool {
+        appearanceOverride(
+            Keys.disablesGlassLook,
+            raw: disablesGlassLook,
+            themed: ThemeManager.shared.activeManifest?.appearance.disablesGlassLook
+        )
     }
 
     var effectiveWindowBackgroundImageURL: URL? {
-        guard let windowBackgroundImagePath, !windowBackgroundImagePath.isEmpty else {
-            return nil
+        if isAppearanceOverridden(Keys.windowBackgroundImagePath),
+           let path = windowBackgroundImagePath, !path.isEmpty,
+           FileManager.default.fileExists(atPath: path) {
+            return URL(fileURLWithPath: path)
         }
 
-        guard FileManager.default.fileExists(atPath: windowBackgroundImagePath) else {
-            return nil
+        if let assetPath = ThemeManager.shared.activeManifest?.appearance.window?.backgroundImage,
+           let url = ThemeManager.shared.activeAssetURL(assetPath) {
+            return url
         }
 
-        return URL(fileURLWithPath: windowBackgroundImagePath)
+        return nil
+    }
+
+    var effectiveWindowBackgroundImageMode: DockBackgroundImageMode {
+        let themed = ThemeManager.shared.activeManifest?.appearance.window?.backgroundImageMode
+            .flatMap(DockBackgroundImageMode.init(rawValue:))
+        return appearanceOverride(Keys.windowBackgroundImageMode, raw: windowBackgroundImageMode, themed: themed)
+    }
+
+    var effectiveActiveIndicatorShape: DockTileIndicatorShape {
+        let themed = ThemeManager.shared.activeManifest?.appearance.indicators?.shape
+            .flatMap(DockTileIndicatorShape.init(rawValue:))
+        return appearanceOverride(Keys.activeIndicatorShape, raw: activeIndicatorShape, themed: themed)
+    }
+
+    var effectiveActiveIndicatorColor: NSColor {
+        if isAppearanceOverridden(Keys.activeIndicatorColor), let user = activeIndicatorColor {
+            return user.nsColor
+        }
+        if let themed = ThemeManager.shared.activeManifest?.appearance.indicators?.color {
+            return themed.dockColor.nsColor
+        }
+        return .labelColor
     }
 
     var effectiveActiveIndicatorImageURL: URL? {
-        guard let activeIndicatorImagePath, !activeIndicatorImagePath.isEmpty else {
-            return nil
+        if isAppearanceOverridden(Keys.activeIndicatorImagePath),
+           let path = activeIndicatorImagePath, !path.isEmpty,
+           FileManager.default.fileExists(atPath: path) {
+            return URL(fileURLWithPath: path)
         }
 
-        guard FileManager.default.fileExists(atPath: activeIndicatorImagePath) else {
-            return nil
+        if let assetPath = ThemeManager.shared.activeManifest?.appearance.indicators?.image,
+           let url = ThemeManager.shared.activeAssetURL(assetPath) {
+            return url
         }
 
-        return URL(fileURLWithPath: activeIndicatorImagePath)
+        return nil
+    }
+
+    var effectiveActiveIndicatorOffset: CGFloat {
+        appearanceOverride(
+            Keys.activeIndicatorOffset,
+            raw: activeIndicatorOffset,
+            themed: ThemeManager.shared.activeManifest?.appearance.indicators?.offset
+        )
+    }
+
+    var effectiveActiveIndicatorScale: CGFloat {
+        appearanceOverride(
+            Keys.activeIndicatorScale,
+            raw: activeIndicatorScale,
+            themed: ThemeManager.shared.activeManifest?.appearance.indicators?.scale
+        )
+    }
+
+    var effectiveMirrorsLeftDividerOnRight: Bool {
+        appearanceOverride(
+            Keys.mirrorsLeftDividerOnRight,
+            raw: mirrorsLeftDividerOnRight,
+            themed: ThemeManager.shared.activeManifest?.appearance.indicators?.divider?.mirrorLeftOnRight
+        )
+    }
+
+    var effectiveDividerPaddingFraction: CGFloat {
+        appearanceOverride(
+            Keys.dividerPaddingFraction,
+            raw: dividerPaddingFraction,
+            themed: ThemeManager.shared.activeManifest?.appearance.indicators?.divider?.paddingFraction
+        )
+    }
+
+    var effectiveDividerImageScale: CGFloat {
+        appearanceOverride(
+            Keys.dividerImageScale,
+            raw: dividerImageScale,
+            themed: ThemeManager.shared.activeManifest?.appearance.indicators?.divider?.imageScale
+        )
+    }
+
+    var effectiveDividerOffset: CGFloat {
+        appearanceOverride(
+            Keys.dividerOffset,
+            raw: dividerOffset,
+            themed: ThemeManager.shared.activeManifest?.appearance.indicators?.divider?.offset
+        )
     }
 
     var effectiveDividerImageURL: URL? {
-        Self.existingFileURL(at: dividerImagePath)
+        if isAppearanceOverridden(Keys.dividerImagePath),
+           let url = Self.existingFileURL(at: dividerImagePath) {
+            return url
+        }
+        if let assetPath = ThemeManager.shared.activeManifest?.appearance.indicators?.divider?.center,
+           let url = ThemeManager.shared.activeAssetURL(assetPath) {
+            return url
+        }
+        return nil
     }
 
     var effectiveLeftDividerImageURL: URL? {
-        Self.existingFileURL(at: leftDividerImagePath) ?? effectiveDividerImageURL
+        if isAppearanceOverridden(Keys.leftDividerImagePath),
+           let url = Self.existingFileURL(at: leftDividerImagePath) {
+            return url
+        }
+        if let assetPath = ThemeManager.shared.activeManifest?.appearance.indicators?.divider?.left,
+           let url = ThemeManager.shared.activeAssetURL(assetPath) {
+            return url
+        }
+        return effectiveDividerImageURL
     }
 
     var effectiveRightDividerImageURL: URL? {
-        if mirrorsLeftDividerOnRight {
+        if effectiveMirrorsLeftDividerOnRight {
             return effectiveLeftDividerImageURL
         }
-
-        return Self.existingFileURL(at: rightDividerImagePath) ?? effectiveDividerImageURL
+        if isAppearanceOverridden(Keys.rightDividerImagePath),
+           let url = Self.existingFileURL(at: rightDividerImagePath) {
+            return url
+        }
+        if let assetPath = ThemeManager.shared.activeManifest?.appearance.indicators?.divider?.right,
+           let url = ThemeManager.shared.activeAssetURL(assetPath) {
+            return url
+        }
+        return effectiveDividerImageURL
     }
 
     /// Resolves the divider image and mirroring flag for a given divider position class.
@@ -1646,7 +1937,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
             guard let url = effectiveLeftDividerImageURL else { return nil }
             return (url, false)
         case .right:
-            if mirrorsLeftDividerOnRight, let url = effectiveLeftDividerImageURL {
+            if effectiveMirrorsLeftDividerOnRight, let url = effectiveLeftDividerImageURL {
                 return (url, true)
             }
 
@@ -1950,6 +2241,8 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         static let appWidgetDisplays = "docky.appWidgetDisplays"
         static let trailingItems = "docky.trailingItems"
         static let hasSeenDockEditorHint = "docky.hasSeenDockEditorHint"
+        static let userOverriddenAppearanceKeys = "docky.userOverriddenAppearanceKeys"
+        static let appearanceOverrideMigrationVersion = "docky.appearanceOverrideMigrationVersion"
     }
 
     private enum DefaultValues {
@@ -2174,6 +2467,32 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         self.appWidgetDisplays = Self.decodeAppWidgetDisplays(from: storedAppWidgetDisplays) ?? DefaultValues.appWidgetDisplays
         self.trailingItems = Self.decodeTrailingItems(from: storedTrailingItems) ?? DefaultValues.trailingItems
         self.hasSeenDockEditorHint = storedHasSeenDockEditorHint ?? DefaultValues.hasSeenDockEditorHint
+
+        // Load the user-override set, then run the one-shot migration
+        // that infers overrides from existing UserDefaults presence.
+        // After this runs once, the set is the authoritative source of
+        // truth — appearance setters maintain it from then on.
+        if let storedOverrideKeys = defaults.stringArray(forKey: Keys.userOverriddenAppearanceKeys) {
+            self.userOverriddenAppearanceKeys = Set(storedOverrideKeys)
+                .intersection(Self.appearanceKeys)
+        }
+
+        let migrationVersion = defaults.integer(forKey: Keys.appearanceOverrideMigrationVersion)
+        if migrationVersion < 1 {
+            // First launch with the override layer: treat any
+            // appearance key that exists in UserDefaults as a user
+            // override. Better to over-respect existing customizations
+            // than to let a theme silently replace them.
+            var seeded = self.userOverriddenAppearanceKeys
+            for key in Self.appearanceKeys {
+                if defaults.object(forKey: key) != nil {
+                    seeded.insert(key)
+                }
+            }
+            self.userOverriddenAppearanceKeys = seeded
+            persistUserOverriddenAppearanceKeys()
+            defaults.set(1, forKey: Keys.appearanceOverrideMigrationVersion)
+        }
     }
 
     func applySystemDockVisibilityPreference() {
@@ -2240,6 +2559,15 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         windowBackgroundImageMode = DefaultValues.windowBackgroundImageMode
         windowTintColor = DefaultValues.windowTintColor
         windowTintOpacity = DefaultValues.windowTintOpacity
+
+        // Clear all override flags so the active theme (if any) takes
+        // over for these fields. The setters above re-mark whichever
+        // keys ended up with a non-default value, but for non-Optional
+        // fields setting back to the exact default doesn't trigger
+        // `didSet` (the guard short-circuits), so any pre-existing
+        // override flag would survive. Clearing them all here is the
+        // simplest way to honor "reset" semantically.
+        clearAllAppearanceOverrides()
     }
 
     func resetToDefaults() {

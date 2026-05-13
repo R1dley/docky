@@ -261,7 +261,7 @@ struct TileContainerView: View {
                 let depth = additionalBundleIdentifiers.count - index
                 AppTileView(
                     tile: AppTile(bundleIdentifier: bundleIdentifier, displayName: ""),
-                    clipShape: preferences.tileClipShape,
+                    clipShape: preferences.effectiveTileClipShape,
                     transparencyCompensationInset: dragPreviewStackTileChromeInset
                 )
                 .frame(width: size.width, height: size.height)
@@ -801,7 +801,7 @@ struct TileContainerView: View {
     }
 
     private var effectiveTileSpacing: CGFloat {
-        layout.scaled(preferences.tileSpacing)
+        layout.scaled(preferences.effectiveTileSpacing)
     }
 
     private var dragPreviewStackTileChromeInset: CGFloat {
@@ -819,7 +819,7 @@ struct TileContainerView: View {
     }
 
     private var tileHeight: CGFloat {
-        effectiveTileSize + layout.scaled(preferences.tileVerticalPadding) * 2
+        effectiveTileSize + layout.scaled(preferences.effectiveTileVerticalPadding) * 2
     }
 
     private var baseTileSize: CGFloat {

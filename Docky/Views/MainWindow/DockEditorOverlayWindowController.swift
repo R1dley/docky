@@ -873,7 +873,7 @@ private struct DockEditorItemPreview: View {
 
     var body: some View {
         let previewSize = size
-        let cornerRadius = preferences.tileClipShape.resolvedCornerRadius(
+        let cornerRadius = preferences.effectiveTileClipShape.resolvedCornerRadius(
             base: previewSize.height * 0.22,
             maximum: previewSize.height / 2
         )
@@ -886,7 +886,7 @@ private struct DockEditorItemPreview: View {
                         bundleIdentifier: LaunchpadTile.spotlightBundleIdentifier,
                         displayName: item.title
                     ),
-                    clipShape: preferences.tileClipShape,
+                    clipShape: preferences.effectiveTileClipShape,
                     transparencyCompensationInset: 0
                 )
                 .frame(width: previewSize.width, height: previewSize.height)

@@ -51,7 +51,7 @@ struct MainWindowView: View {
     private func chromeBackground(cornerRadius: CGFloat) -> some View {
         backgroundFill(cornerRadius: cornerRadius)
             .background {
-                if !preferences.disablesGlassLook,
+                if !preferences.effectiveDisablesGlassLook,
                    FeatureGate.shared.isAvailable(.liquidGlass),
                    #available(macOS 26.0, *) {
                     LiquidGlassChromeView(variant: 11, cornerRadius: cornerRadius)
@@ -59,7 +59,7 @@ struct MainWindowView: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
-                if !preferences.disablesGlassLook {
+                if !preferences.effectiveDisablesGlassLook {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .inset(by: borderWidth / 2)
                         .strokeBorder(borderGradient, lineWidth: borderWidth)
@@ -94,7 +94,7 @@ struct MainWindowView: View {
 
     @ViewBuilder
     private func backgroundImageContent(image: NSImage) -> some View {
-        switch preferences.windowBackgroundImageMode {
+        switch preferences.effectiveWindowBackgroundImageMode {
         case .fill:
             Image(nsImage: image)
                 .resizable()
@@ -120,15 +120,15 @@ struct MainWindowView: View {
     private var borderGradient: LinearGradient { dockyGlassBorderGradient }
 
     private var effectiveCornerRadius: CGFloat {
-        preferences.windowClipShape.resolvedCornerRadius(
-            base: preferences.windowCornerRadius,
+        preferences.effectiveWindowClipShape.resolvedCornerRadius(
+            base: preferences.effectiveWindowCornerRadius,
             maximum: maximumCornerRadius
         )
     }
 
     private var maximumCornerRadius: CGFloat {
         let iconHeight = layoutService.scaled(dockSettings.displayTileSize)
-        return (iconHeight + layoutService.scaled(preferences.tileVerticalPadding) * 2) / 2
+        return (iconHeight + layoutService.scaled(preferences.effectiveTileVerticalPadding) * 2) / 2
     }
 
     private var resolvedChromeFrameSize: CGSize? {

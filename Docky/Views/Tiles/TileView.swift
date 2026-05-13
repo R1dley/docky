@@ -628,7 +628,7 @@ struct TileView: View {
     @ViewBuilder
     private var runningIndicator: some View {
         if showsRunningIndicator {
-            switch preferences.activeIndicatorShape {
+            switch preferences.effectiveActiveIndicatorShape {
             case .none:
                 EmptyView()
             case .dot, .pill:
@@ -666,7 +666,7 @@ struct TileView: View {
 
     @ViewBuilder
     private var runningIndicatorShape: some View {
-        switch preferences.activeIndicatorShape {
+        switch preferences.effectiveActiveIndicatorShape {
         case .none, .image:
             EmptyView()
         case .dot:
@@ -677,7 +677,7 @@ struct TileView: View {
     }
 
     private var runningIndicatorSize: CGSize {
-        switch preferences.activeIndicatorShape {
+        switch preferences.effectiveActiveIndicatorShape {
         case .none:
             .zero
         case .dot:
@@ -719,12 +719,12 @@ struct TileView: View {
 
     private var runningIndicatorScale: CGFloat {
         let baseScale = max(0.5, min(1, effectiveTileSize / 48))
-        return baseScale * max(0.25, preferences.activeIndicatorScale)
+        return baseScale * max(0.25, preferences.effectiveActiveIndicatorScale)
     }
 
     private var runningIndicatorOffsetVector: CGSize {
-        let baseInward = max((layout.scaled(preferences.tileVerticalPadding) / 2), 2)
-        let totalInward = baseInward + preferences.activeIndicatorOffset
+        let baseInward = max((layout.scaled(preferences.effectiveTileVerticalPadding) / 2), 2)
+        let totalInward = baseInward + preferences.effectiveActiveIndicatorOffset
 
         switch position {
         case .top:
@@ -751,7 +751,7 @@ struct TileView: View {
         case .divider:
             0
         default:
-            layout.scaled(preferences.tileVerticalPadding)
+            layout.scaled(preferences.effectiveTileVerticalPadding)
         }
     }
 
@@ -799,7 +799,7 @@ struct TileView: View {
 
     private var nonAppTileCornerRadius: CGFloat {
         let maximumCornerRadius = max(0, (effectiveTileSize - nonAppContentPadding * 2) / 2)
-        return preferences.tileClipShape.resolvedCornerRadius(
+        return preferences.effectiveTileClipShape.resolvedCornerRadius(
             base: effectiveTileSize * 0.225,
             maximum: maximumCornerRadius
         )
@@ -810,7 +810,7 @@ struct TileView: View {
     /// container so the in-progress folder visually matches a finished one.
     private var appFolderDropTargetCornerRadius: CGFloat {
         let maximumCornerRadius = max(0, effectiveTileSize / 2)
-        return preferences.tileClipShape.resolvedCornerRadius(
+        return preferences.effectiveTileClipShape.resolvedCornerRadius(
             base: effectiveTileSize * 0.225,
             maximum: maximumCornerRadius
         )
@@ -892,7 +892,7 @@ struct TileView: View {
             } else {
                 AppTileView(
                     tile: app,
-                    clipShape: preferences.tileClipShape,
+                    clipShape: preferences.effectiveTileClipShape,
                     transparencyCompensationInset: tileChromeInset
                 )
             }
@@ -910,7 +910,7 @@ struct TileView: View {
                     bundleIdentifier: LaunchpadTile.spotlightBundleIdentifier,
                     displayName: launchpad.title
                 ),
-                clipShape: preferences.tileClipShape,
+                clipShape: preferences.effectiveTileClipShape,
                 transparencyCompensationInset: 0,
                 iconOverrideURL: preferences.effectiveLaunchpadIconOverrideURL,
                 iconOverridePaddingFraction: preferences.launchpadIconPaddingFraction

@@ -175,7 +175,7 @@ struct AppFolderTileView: View {
     private func iconGrid(in size: CGSize) -> some View {
         let displayedApps = Array(tile.apps.prefix(4))
         let side = min(size.width, size.height) * 0.36
-        let gap = min(size.width, size.height) * (preferences.tileClipShape == .circle ? 0 : 0.06)
+        let gap = min(size.width, size.height) * (preferences.effectiveTileClipShape == .circle ? 0 : 0.06)
 
         return ZStack {
             Color.clear
@@ -201,8 +201,8 @@ struct AppFolderTileView: View {
                                         side: side
                                     )
                                 } else {
-                                    if preferences.tileClipShape == .circle {
-                                        let inset = preferences.tileClipShape == .circle ? floor(side * 3 / 32) : 0
+                                    if preferences.effectiveTileClipShape == .circle {
+                                        let inset = preferences.effectiveTileClipShape == .circle ? floor(side * 3 / 32) : 0
                                         Circle()
                                             .fill(.primary.opacity(0.06))
                                             .padding(inset)
@@ -251,7 +251,7 @@ struct AppFolderTileView: View {
     private func appStackTile(for app: AppTile, in size: CGSize, chromeInset: CGFloat) -> some View {
         AppTileView(
             tile: AppTile(bundleIdentifier: app.bundleIdentifier, displayName: app.displayName),
-            clipShape: preferences.tileClipShape,
+            clipShape: preferences.effectiveTileClipShape,
             transparencyCompensationInset: chromeInset
         )
         .frame(width: size.width, height: size.height)
@@ -294,7 +294,7 @@ struct AppFolderTileView: View {
     }
 
     private func shouldApplyCircleClip(to bundleIdentifier: String) -> Bool {
-        preferences.tileClipShape == .circle
+        preferences.effectiveTileClipShape == .circle
     }
 
     private func icon(forBundleIdentifier bundleIdentifier: String) -> NSImage {

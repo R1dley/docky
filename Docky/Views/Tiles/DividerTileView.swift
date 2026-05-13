@@ -30,7 +30,7 @@ struct DividerTileView: View {
     }
 
     private var dividerOffsetVector: CGSize {
-        let amount = preferences.dividerOffset
+        let amount = preferences.effectiveDividerOffset
         if position.isVertical {
             return CGSize(width: amount, height: 0)
         } else {
@@ -106,7 +106,7 @@ struct DividerTileView: View {
 
     @ViewBuilder
     private func customImageDivider(nsImage: NSImage, mirrored: Bool) -> some View {
-        let imageScale = max(0.25, preferences.dividerImageScale)
+        let imageScale = max(0.25, preferences.effectiveDividerImageScale)
         Image(nsImage: nsImage)
             .resizable()
             .aspectRatio(contentMode: .fit)
@@ -137,7 +137,7 @@ struct DividerTileView: View {
     }
 
     private var lineInset: CGFloat {
-        let fraction = min(max(preferences.dividerPaddingFraction, 0), 0.5)
+        let fraction = min(max(preferences.effectiveDividerPaddingFraction, 0), 0.5)
         return layout.scaled(dockSettings.displayTileSize) * fraction
     }
 
