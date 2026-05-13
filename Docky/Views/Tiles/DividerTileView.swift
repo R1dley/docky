@@ -43,6 +43,9 @@ struct DividerTileView: View {
             .action(preferences.autohidesWindow ? "Turn Hiding Off" : "Turn Hiding On") {
                 preferences.autohidesWindow.toggle()
             },
+            .action(dockSettings.magnification ? "Turn Magnification Off" : "Turn Magnification On") {
+                dockSettings.setMagnification(!dockSettings.magnification)
+            },
             .submenu(String(localized: "Position on Screen"), children: positionActions),
             .divider,
 //            .action("Smart Organize Pinned Items") {
