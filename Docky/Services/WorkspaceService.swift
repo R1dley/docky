@@ -542,7 +542,9 @@ final class WorkspaceService: ObservableObject {
         let ordered = newMap.values.sorted(by: Self.byLaunchDate)
 
         runningByBundleID = newMap
-        runningApps = ordered
+        if runningApps != ordered {
+            runningApps = ordered
+        }
         refreshWindowDerivedState()
     }
 
@@ -594,11 +596,18 @@ final class WorkspaceService: ObservableObject {
     /// array and drives preview captures. Called whenever the registry's
     /// snapshot, the running-apps list, or the screen-capture permission
     /// changes.
+    ///
+    /// Also re-runs the full `refresh()` so the published running-apps list
+    /// catches apps whose `activationPolicy` promotes to `.regular` *after*
+    /// `didLaunchApplicationNotification` (some apps launch as `.prohibited`
+    /// or `.accessory` and only become dock-eligible once their first
+    /// window appears). The `runningApps` setter is diff-guarded so this
+    /// extra pass costs nothing when no app changed eligibility.
     private func subscribeToRegistry() {
         WindowRegistry.shared.$windows
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.refreshWindowDerivedState()
+                self?.refresh()
             }
             .store(in: &cancellables)
     }

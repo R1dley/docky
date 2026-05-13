@@ -2046,8 +2046,22 @@ final class TileStore: ObservableObject {
         )
 
         let shelveMode = preferences.enablesShelveMode
-        let recentsHidden = preferences.hidesRecentApps || !preferences.showsRunningApps
-        let runningTiles = recentsHidden ? [] : displayedRunning.map(Self.tile(for:))
+        let runningTiles: [Tile]
+        if !preferences.showsRunningApps {
+            runningTiles = []
+        } else if preferences.hidesRecentApps {
+            // "Hide recent apps" only suppresses the non-running tail —
+            // currently running unpinned apps still belong in the dock.
+            // The only non-running entry `displayedRunning` ever holds is
+            // the trailing "ghost" preserved by `resolveDisplayedRunning`
+            // so a just-quit app's slot doesn't snap shut; filter it out.
+            let liveBundleIDs = WorkspaceService.shared.runningBundleIdentifiers
+            runningTiles = displayedRunning
+                .filter { liveBundleIDs.contains($0.bundleIdentifier) }
+                .map(Self.tile(for:))
+        } else {
+            runningTiles = displayedRunning.map(Self.tile(for:))
+        }
         let minimizedWindowTiles = preferences.showsMinimizedWindows
             ? WorkspaceService.shared.minimizedWindows.map(Self.tile(for:))
             : []
