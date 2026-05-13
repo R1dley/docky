@@ -7,6 +7,7 @@ import SwiftUI
 
 struct BehaviorSettingsView: View {
     enum Subsection {
+        case general
         case placement
         case visibility
         case appTileClick
@@ -20,10 +21,13 @@ struct BehaviorSettingsView: View {
 
     @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var product = ProductService.shared
+    @State private var isShowingResetConfirmation = false
 
     var body: some View {
         Form {
             switch subsection {
+            case .general:
+                generalSection
             case .placement:
                 placementSection
             case .visibility:
@@ -41,6 +45,39 @@ struct BehaviorSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .confirmationDialog(
+            "Reset behavior settings?",
+            isPresented: $isShowingResetConfirmation
+        ) {
+            Button("Reset Behavior", role: .destructive) {
+                DockyPreferences.shared.resetBehaviorToDefaults()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Placement, visibility, app-tile click, app folders, widgets, launch, and system-dock settings will return to their defaults. Appearance, app icons, and other settings are unaffected. This cannot be undone.")
+        }
+    }
+
+    @ViewBuilder
+    private var generalSection: some View {
+        Section("Behavior") {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Reset Behavior Settings")
+                    .font(.headline)
+
+                HStack {
+                    Button("Reset to Defaults", role: .destructive) {
+                        isShowingResetConfirmation = true
+                    }
+                    Spacer()
+                }
+
+                Text("Reverts every behavior setting (placement, visibility, app-tile click, app folders, widgets, launch, system-dock) to its built-in default. Use this when a theme has nudged behavior in a direction you want to undo.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+        }
     }
 
     @ViewBuilder

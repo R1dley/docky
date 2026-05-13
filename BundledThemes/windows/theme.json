@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "windows-10",
-  "name": "Windows 10",
+  "id": "windows",
+  "name": "Windows",
   "author": "Docky",
   "version": "1.0.0",
   "description": "Flat, dark Windows 10 taskbar look: sharp-cornered chrome with a near-opaque charcoal fill, no glass, tight tile spacing, and a thin accent-blue running-app pill at the bottom edge.",
@@ -20,7 +20,7 @@
       "shape": "underline",
       "color": { "r": 0.0, "g": 0.4706, "b": 0.8431 },
       "scale": 0.7,
-      "offset": 0,
+      "offset": -2,
       "divider": {
         "color": { "r": 1, "g": 1, "b": 1 },
         "opacity": 0.15,

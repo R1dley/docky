@@ -420,6 +420,107 @@ struct AppearanceSettingsView: View {
             .padding(.vertical, 4)
 
             VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Tile Icon Padding")
+                        .font(.headline)
+
+                    Spacer()
+
+                    HStack {
+                        Slider(value: $preferences.tileIconPadding, in: 0...24, step: 1) {
+                            Text("Tile Icon Padding")
+                        }
+                        .labelsHidden()
+                        Text("\(Int(preferences.effectiveTileIconPadding)) pt")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 48, alignment: .trailing)
+                    }
+                }
+
+                Text("Shrinks the rendered icon inside each tile without changing the tile's layout box — useful for Windows-style chunky tile slots.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Tile Hover Effect")
+                    .font(.headline)
+
+                Toggle("Use Hover Background", isOn: usesHoverBackgroundColorBinding)
+
+                if preferences.tileHoverBackgroundColor != nil {
+                    ColorPicker("Hover Background Color", selection: hoverBackgroundColorBinding, supportsOpacity: false)
+                }
+
+                HStack {
+                    Text("Hover Background Image")
+                    Spacer()
+                    Button("Choose Image...") { chooseTileHoverBackgroundImage() }
+                    if preferences.tileHoverBackgroundImagePath != nil {
+                        Button("Clear") { preferences.tileHoverBackgroundImagePath = nil }
+                    }
+                }
+
+                if let name = selectedHoverBackgroundImageName {
+                    Text(name)
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                }
+
+                HStack {
+                    Text("Background Opacity")
+                    Slider(value: hoverBackgroundOpacityBinding, in: 0...1, step: 0.05) {
+                        Text("Hover Background Opacity")
+                    }
+                    .labelsHidden()
+                    Text("\(Int((preferences.effectiveTileHoverBackgroundOpacity * 100).rounded()))%")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 56, alignment: .trailing)
+                }
+                .disabled(!hasHoverBackgroundSource)
+
+                HStack {
+                    Text("Background Corner Radius")
+                    Slider(value: hoverBackgroundCornerRadiusBinding, in: 0...32, step: 1) {
+                        Text("Hover Background Corner Radius")
+                    }
+                    .labelsHidden()
+                    Text("\(Int(preferences.effectiveTileHoverBackgroundCornerRadius)) pt")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 56, alignment: .trailing)
+                }
+                .disabled(!hasHoverBackgroundSource)
+
+                HStack {
+                    Text("Hover Scale")
+                    Slider(value: hoverScaleBinding, in: 0.8...1.4, step: 0.01) {
+                        Text("Hover Scale")
+                    }
+                    .labelsHidden()
+                    Text(String(format: "%.2f×", preferences.effectiveTileHoverScale))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 56, alignment: .trailing)
+                }
+
+                HStack {
+                    Text("Hover Opacity")
+                    Slider(value: hoverOpacityBinding, in: 0...1, step: 0.05) {
+                        Text("Hover Opacity")
+                    }
+                    .labelsHidden()
+                    Text("\(Int((preferences.effectiveTileHoverOpacity * 100).rounded()))%")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 56, alignment: .trailing)
+                }
+
+                Text("Layered hover treatment: a background fill (color or image), plus optional scale and opacity multipliers applied to the icon while hovered.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+
+            VStack(alignment: .leading, spacing: 8) {
                 Toggle("Use Icon Shadow", isOn: usesIconShadowBinding)
                     .font(.headline)
 
@@ -534,6 +635,49 @@ struct AppearanceSettingsView: View {
             }
             .padding(.vertical, 4)
             .disabled(preferences.windowClipShape == .circle)
+
+            DisclosureGroup("Per-Corner Radii") {
+                cornerRadiusRow(
+                    label: "Top Leading",
+                    binding: $preferences.windowCornerRadiusTopLeading,
+                    effective: preferences.effectiveWindowCornerRadiusTopLeading
+                )
+                cornerRadiusRow(
+                    label: "Top Trailing",
+                    binding: $preferences.windowCornerRadiusTopTrailing,
+                    effective: preferences.effectiveWindowCornerRadiusTopTrailing
+                )
+                cornerRadiusRow(
+                    label: "Bottom Leading",
+                    binding: $preferences.windowCornerRadiusBottomLeading,
+                    effective: preferences.effectiveWindowCornerRadiusBottomLeading
+                )
+                cornerRadiusRow(
+                    label: "Bottom Trailing",
+                    binding: $preferences.windowCornerRadiusBottomTrailing,
+                    effective: preferences.effectiveWindowCornerRadiusBottomTrailing
+                )
+
+                Text("Each corner that's set overrides only itself; unset corners inherit the uniform radius above. Use this to flatten only the screen-facing edge (taskbar look).")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .disabled(preferences.windowClipShape == .circle)
+            .padding(.vertical, 4)
+
+            DisclosureGroup("Per-Edge Content Insets") {
+                contentInsetRow(label: "Top", value: $preferences.windowContentInsetTop)
+                contentInsetRow(label: "Leading", value: $preferences.windowContentInsetLeading)
+                contentInsetRow(label: "Bottom", value: $preferences.windowContentInsetBottom)
+                contentInsetRow(label: "Trailing", value: $preferences.windowContentInsetTrailing)
+
+                Text("Padding between the dock panel and the chrome view, per edge. Full-axis mode forces these to 0 regardless.")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
 
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("Use Custom Border", isOn: usesCustomWindowBorderBinding)
@@ -887,6 +1031,147 @@ struct AppearanceSettingsView: View {
         }
 
         preferences.windowBackgroundImagePath = url.path
+    }
+
+    private func chooseTileHoverBackgroundImage() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.prompt = "Choose Image"
+
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+
+        preferences.tileHoverBackgroundImagePath = url.path
+    }
+
+    private var selectedHoverBackgroundImageName: String? {
+        guard let path = preferences.tileHoverBackgroundImagePath, !path.isEmpty else {
+            return nil
+        }
+        return URL(fileURLWithPath: path).lastPathComponent
+    }
+
+    private var hasHoverBackgroundSource: Bool {
+        preferences.effectiveTileHoverBackgroundColor != nil
+            || preferences.effectiveTileHoverBackgroundImageURL != nil
+    }
+
+    private var usesHoverBackgroundColorBinding: Binding<Bool> {
+        Binding(
+            get: { preferences.effectiveTileHoverBackgroundColor != nil },
+            set: { uses in
+                if uses {
+                    let seed = preferences.effectiveTileHoverBackgroundColor ?? .white
+                    preferences.tileHoverBackgroundColor = DockColor(nsColor: seed)
+                } else {
+                    preferences.tileHoverBackgroundColor = nil
+                }
+            }
+        )
+    }
+
+    private var hoverBackgroundColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                let ns = preferences.effectiveTileHoverBackgroundColor ?? .white
+                return Color(nsColor: ns)
+            },
+            set: { newValue in
+                guard let color = DockColor(nsColor: NSColor(newValue)) else { return }
+                preferences.tileHoverBackgroundColor = color
+            }
+        )
+    }
+
+    private var hoverBackgroundOpacityBinding: Binding<Double> {
+        Binding(
+            get: { Double(preferences.effectiveTileHoverBackgroundOpacity) },
+            set: { preferences.tileHoverBackgroundOpacity = CGFloat($0) }
+        )
+    }
+
+    private var hoverBackgroundCornerRadiusBinding: Binding<Double> {
+        Binding(
+            get: { Double(preferences.effectiveTileHoverBackgroundCornerRadius) },
+            set: { preferences.tileHoverBackgroundCornerRadius = CGFloat($0) }
+        )
+    }
+
+    private var hoverScaleBinding: Binding<Double> {
+        Binding(
+            get: { Double(preferences.effectiveTileHoverScale) },
+            set: { preferences.tileHoverScale = CGFloat($0) }
+        )
+    }
+
+    private var hoverOpacityBinding: Binding<Double> {
+        Binding(
+            get: { Double(preferences.effectiveTileHoverOpacity) },
+            set: { preferences.tileHoverOpacity = CGFloat($0) }
+        )
+    }
+
+    @ViewBuilder
+    private func cornerRadiusRow(
+        label: String,
+        binding: Binding<CGFloat?>,
+        effective: CGFloat
+    ) -> some View {
+        // Three-state row: the toggle is the user's *intent* (override this
+        // corner or inherit the uniform value); the slider only matters
+        // when the override is on. Mirrors `usesCustomWindowBorderBinding`
+        // pattern — flipping the toggle off restores nil + clears the
+        // appearance-override flag so the theme/uniform value comes back.
+        let usesOverride = Binding<Bool>(
+            get: { binding.wrappedValue != nil },
+            set: { uses in
+                if uses {
+                    binding.wrappedValue = effective
+                } else {
+                    binding.wrappedValue = nil
+                }
+            }
+        )
+        let value = Binding<Double>(
+            get: { Double(binding.wrappedValue ?? effective) },
+            set: { binding.wrappedValue = CGFloat($0) }
+        )
+
+        HStack {
+            Toggle(isOn: usesOverride) {
+                Text(label).frame(width: 120, alignment: .leading)
+            }
+            .toggleStyle(.checkbox)
+            Slider(value: value, in: 0...maximumCornerRadius, step: 1) {
+                Text(label)
+            }
+            .labelsHidden()
+            .disabled(!usesOverride.wrappedValue)
+            Text("\(Int(effective)) pt")
+                .foregroundStyle(.secondary)
+                .frame(width: 48, alignment: .trailing)
+        }
+    }
+
+    @ViewBuilder
+    private func contentInsetRow(label: String, value: Binding<CGFloat>) -> some View {
+        HStack {
+            Text(label).frame(width: 120, alignment: .leading)
+            Slider(value: Binding(
+                get: { Double(value.wrappedValue) },
+                set: { value.wrappedValue = CGFloat($0) }
+            ), in: 0...16, step: 1) {
+                Text(label)
+            }
+            .labelsHidden()
+            Text("\(Int(value.wrappedValue)) pt")
+                .foregroundStyle(.secondary)
+                .frame(width: 48, alignment: .trailing)
+        }
     }
 
     private enum DividerImageSlot {

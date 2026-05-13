@@ -3217,6 +3217,15 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         tileClipShape = DefaultValues.tileClipShape
         tileVerticalPadding = DefaultValues.tileVerticalPadding
         tileSpacing = DefaultValues.tileSpacing
+        tileIconPadding = DefaultValues.tileIconPadding
+
+        // Tile Hover Effect
+        tileHoverOpacity = nil
+        tileHoverScale = nil
+        tileHoverBackgroundColor = nil
+        tileHoverBackgroundImagePath = nil
+        tileHoverBackgroundOpacity = nil
+        tileHoverBackgroundCornerRadius = nil
 
         // Icon Shadow (lives next to Tile Layout in the UI)
         iconShadowColor = DefaultValues.iconShadowColor
@@ -3226,6 +3235,14 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         // Window Shape
         windowClipShape = DefaultValues.windowClipShape
         windowCornerRadius = DefaultValues.windowCornerRadius
+        windowCornerRadiusTopLeading = nil
+        windowCornerRadiusTopTrailing = nil
+        windowCornerRadiusBottomLeading = nil
+        windowCornerRadiusBottomTrailing = nil
+        windowContentInsetTop = DefaultValues.windowContentInset
+        windowContentInsetLeading = DefaultValues.windowContentInset
+        windowContentInsetBottom = DefaultValues.windowContentInset
+        windowContentInsetTrailing = DefaultValues.windowContentInset
         windowBorderColor = DefaultValues.windowBorderColor
         windowBorderWidth = DefaultValues.windowBorderWidth
 
@@ -3242,6 +3259,60 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         // `didSet` (the guard short-circuits), so any pre-existing
         // override flag would survive. Clearing them all here is the
         // simplest way to honor "reset" semantically.
+        clearAllAppearanceOverrides()
+    }
+
+    /// Resets every preference surfaced in the Behavior settings panes
+    /// (placement, visibility, app-tile click, app folders, widgets,
+    /// launch, system-dock). Leaves appearance, app icons, hidden apps,
+    /// pinned tiles, and feature-specific surfaces (Launchpad / Window
+    /// Manager / Actions) untouched. Mirrors `resetAppearanceToDefaults`.
+    func resetBehaviorToDefaults() {
+        // Placement
+        windowPosition = DefaultValues.windowPosition
+        windowDisplayTarget = DefaultValues.windowDisplayTarget
+        windowSpaceBehavior = DefaultValues.windowSpaceBehavior
+        windowAxisSizing = DefaultValues.windowAxisSizing
+        maximizedWindowBehavior = DefaultValues.maximizedWindowBehavior
+        overflowBehavior = DefaultValues.overflowBehavior
+
+        // Visibility
+        autohidesWindow = DefaultValues.autohidesWindow
+        autohideWindowDelay = DefaultValues.autohideWindowDelay
+        hidesDuringFullscreen = DefaultValues.hidesDuringFullscreen
+        fullscreenRevealDelay = DefaultValues.fullscreenRevealDelay
+        enablesShelveMode = DefaultValues.enablesShelveMode
+        hidesRecentApps = DefaultValues.hidesRecentApps
+        showsRunningApps = DefaultValues.showsRunningApps
+        showsMinimizedWindows = DefaultValues.showsMinimizedWindows
+        showsActivePinnedSeparator = DefaultValues.showsActivePinnedSeparator
+
+        // App-tile click
+        appTileFrontmostClickBehavior = DefaultValues.appTileFrontmostClickBehavior
+
+        // App folders
+        showsGroupedOpenedAppsInDock = DefaultValues.showsGroupedOpenedAppsInDock
+        showsGroupedOpenedAppsBackdrop = DefaultValues.showsGroupedOpenedAppsBackdrop
+
+        // Widgets
+        enablesWidgetHoverPreview = DefaultValues.enablesWidgetHoverPreview
+        widgetHoverPreviewSpans = DefaultValues.widgetHoverPreviewSpans
+        widgetHoverPreviewDelay = DefaultValues.widgetHoverPreviewDelay
+        windowPreviewHoverDelay = DefaultValues.windowPreviewHoverDelay
+        windowPreviewLayout = DefaultValues.windowPreviewLayout
+
+        // Launch
+        opensAtLogin = DefaultValues.opensAtLogin
+
+        // System dock
+        hidesSystemDock = DefaultValues.hidesSystemDock
+
+        // Same rationale as `resetAppearanceToDefaults`: setters guard
+        // against same-value writes, so any pre-existing override flag
+        // would survive without an explicit wipe. The behavior keys
+        // currently in `appearanceKeys` (windowAxisSizing, tileSize,
+        // largeSize, magnification) get their override status cleared
+        // alongside the rest — themes can drive these again.
         clearAllAppearanceOverrides()
     }
 

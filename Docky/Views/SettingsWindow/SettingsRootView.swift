@@ -14,6 +14,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
     case appearanceWindowBackground
     case appearanceThemes
     case appIcons
+    case behaviorGeneral
     case behaviorPlacement
     case behaviorVisibility
     case behaviorAppTileClick
@@ -40,6 +41,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         case .appearanceWindowBackground: "Window Background"
         case .appearanceThemes: "Themes"
         case .appIcons: "App Icons"
+        case .behaviorGeneral: "General"
         case .behaviorPlacement: "Placement"
         case .behaviorVisibility: "Visibility"
         case .behaviorAppTileClick: "App Tile Click"
@@ -66,6 +68,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         case .appearanceWindowBackground: "rectangle.fill"
         case .appearanceThemes: "paintpalette"
         case .appIcons: "app.badge"
+        case .behaviorGeneral: "slider.horizontal.3"
         case .behaviorPlacement: "arrow.up.and.down.and.arrow.left.and.right"
         case .behaviorVisibility: "eye"
         case .behaviorAppTileClick: "cursorarrow.click"
@@ -92,6 +95,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         case .appearanceWindowBackground: .blue
         case .appearanceThemes: .pink
         case .appIcons: .pink
+        case .behaviorGeneral: .gray
         case .behaviorPlacement: .teal
         case .behaviorVisibility: .cyan
         case .behaviorAppTileClick: .mint
@@ -136,6 +140,7 @@ private let settingsSections: [SettingsSection] = [
         .appIcons
     ]),
     SettingsSection(id: "behavior", title: "Behavior", panes: [
+        .behaviorGeneral,
         .behaviorPlacement,
         .behaviorVisibility,
         .behaviorAppTileClick,
@@ -255,6 +260,8 @@ private struct SettingsDetailView: View {
             ThemesSettingsView()
         case .appIcons:
             AppIconsSettingsView()
+        case .behaviorGeneral:
+            BehaviorSettingsView(subsection: .general)
         case .behaviorPlacement:
             BehaviorSettingsView(subsection: .placement)
         case .behaviorVisibility:
