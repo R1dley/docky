@@ -24,12 +24,11 @@ struct MainWindowView: View {
         let _ = Self._printChanges()
         #endif
 
-        let cornerRadius = effectiveCornerRadius
         let chromeFrameSize = resolvedChromeFrameSize
         let dockEdge = dockEdgeAlignment
 
         ZStack(alignment: dockEdge) {
-            chromeBackground(cornerRadius: cornerRadius)
+            chromeBackground()
                 .frame(width: chromeFrameSize?.width, height: chromeFrameSize?.height)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: dockEdge)
                 .allowsHitTesting(true)
@@ -62,16 +61,30 @@ struct MainWindowView: View {
     }
 
     @ViewBuilder
-    private func chromeBackground(cornerRadius: CGFloat) -> some View {
-        backgroundFill(cornerRadius: cornerRadius)
+    private func chromeBackground() -> some View {
+        let radii = chromeCornerRadii
+        backgroundFill(radii: radii)
             .background {
                 if !preferences.effectiveDisablesGlassLook,
                    FeatureGate.shared.isAvailable(.liquidGlass),
                    #available(macOS 26.0, *) {
-                    LiquidGlassChromeView(variant: 11, cornerRadius: cornerRadius)
+                    // NSGlassEffectView only supports a uniform corner
+                    // radius via `layer.cornerRadius`. Pass the largest
+                    // of the four so the material extends out to the
+                    // widest curve; the SwiftUI `clipShape` below then
+                    // trims the smaller corners down to their target
+                    // radii. Net result: per-corner radii visually, no
+                    // private-API surface area added.
+                    LiquidGlassChromeView(
+                        variant: 11,
+                        cornerRadius: max(
+                            radii.topLeading, radii.topTrailing,
+                            radii.bottomLeading, radii.bottomTrailing
+                        )
+                    )
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .clipShape(UnevenRoundedRectangle(cornerRadii: radii, style: .continuous))
             .overlay {
                 // Theme border, when set, takes precedence over the
                 // default glass stroke. When no theme border is set
@@ -80,12 +93,12 @@ struct MainWindowView: View {
                 if let themeBorder = preferences.effectiveWindowBorderColor {
                     let width = max(0, preferences.effectiveWindowBorderWidth)
                     if width > 0 {
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        UnevenRoundedRectangle(cornerRadii: radii, style: .continuous)
                             .inset(by: width / 2)
                             .strokeBorder(Color(nsColor: themeBorder), lineWidth: width)
                     }
                 } else if !preferences.effectiveDisablesGlassLook {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    UnevenRoundedRectangle(cornerRadii: radii, style: .continuous)
                         .inset(by: borderWidth / 2)
                         .strokeBorder(borderGradient, lineWidth: borderWidth)
                 }
@@ -93,10 +106,10 @@ struct MainWindowView: View {
     }
 
     @ViewBuilder
-    private func backgroundFill(cornerRadius: CGFloat) -> some View {
+    private func backgroundFill(radii: RectangleCornerRadii) -> some View {
         let resolvedPosition = preferences.windowPosition.resolved(systemOrientation: dockSettings.orientation)
         let rotated = resolvedPosition.isVertical
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        UnevenRoundedRectangle(cornerRadii: radii, style: .continuous)
             .fill(Color.clear)
             .background {
                 if let backgroundImage = resolvedBackgroundImage {
@@ -144,10 +157,26 @@ struct MainWindowView: View {
 
     private var borderGradient: LinearGradient { dockyGlassBorderGradient }
 
+    /// The uniform fallback radius, clamped to the chrome's max curve.
+    /// Per-corner accessors fall back to this when the user/theme
+    /// hasn't supplied a corner-specific value.
     private var effectiveCornerRadius: CGFloat {
         preferences.effectiveWindowClipShape.resolvedCornerRadius(
             base: preferences.effectiveWindowCornerRadius,
             maximum: maximumCornerRadius
+        )
+    }
+
+    /// Per-corner radii used by every chrome shape (fill, glass clip,
+    /// border). Each corner is the theme/user override clamped to the
+    /// max curve, falling through to the uniform value when unset.
+    private var chromeCornerRadii: RectangleCornerRadii {
+        let cap = maximumCornerRadius
+        return RectangleCornerRadii(
+            topLeading: min(preferences.effectiveWindowCornerRadiusTopLeading, cap),
+            bottomLeading: min(preferences.effectiveWindowCornerRadiusBottomLeading, cap),
+            bottomTrailing: min(preferences.effectiveWindowCornerRadiusBottomTrailing, cap),
+            topTrailing: min(preferences.effectiveWindowCornerRadiusTopTrailing, cap)
         )
     }
 
@@ -167,7 +196,7 @@ struct MainWindowView: View {
         // This naturally handles edge truncation and non-1×1 widgets in
         // the influence radius — both of which reduce the effective
         // total below the closed-form constant.
-        let usesFullAxis = preferences.windowAxisSizing == .fullAxis
+        let usesFullAxis = preferences.effectiveWindowAxisSizing == .fullAxis
         let chromeGrowth = chromeMetrics.alongAxisGrowth
         guard dockSettings.magnification, !usesFullAxis, chromeGrowth > 0 else {
             return chromeSize

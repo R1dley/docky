@@ -72,7 +72,7 @@ private struct DockyGlassBorderModifier<S: InsettableShape>: ViewModifier {
         // need to, so flips to `disablesGlassLook` still propagate via
         // their existing dependency graph and re-evaluate this body.
         content.overlay {
-            if !DockyPreferences.shared.disablesGlassLook {
+            if !DockyPreferences.shared.effectiveDisablesGlassLook {
                 shape.strokeBorder(dockyGlassBorderGradient, lineWidth: lineWidth)
             }
         }

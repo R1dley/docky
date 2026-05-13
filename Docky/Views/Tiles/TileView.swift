@@ -655,7 +655,7 @@ struct TileView: View {
             switch preferences.effectiveActiveIndicatorShape {
             case .none:
                 EmptyView()
-            case .dot, .pill:
+            case .dot, .pill, .underline:
                 runningIndicatorShape
                     .frame(width: runningIndicatorSize.width, height: runningIndicatorSize.height)
                     .foregroundStyle(Color(nsColor: preferences.effectiveActiveIndicatorColor).opacity(0.9))
@@ -707,6 +707,10 @@ struct TileView: View {
             Circle()
         case .pill:
             Capsule()
+        case .underline:
+            // Sharp-cornered rectangle that spans the icon edge —
+            // Windows 10-style accent line under running apps.
+            Rectangle()
         }
     }
 
@@ -721,6 +725,16 @@ struct TileView: View {
                 CGSize(width: runningIndicatorThickness, height: runningIndicatorLength)
             } else {
                 CGSize(width: runningIndicatorLength, height: runningIndicatorThickness)
+            }
+        case .underline:
+            // Span the icon's full extent along the dock axis; stay
+            // thin along the screen-facing axis. The overlay alignment +
+            // existing offset keep it flush against the screen-facing
+            // edge.
+            if position.isVertical {
+                CGSize(width: runningIndicatorThickness, height: effectiveTileSize)
+            } else {
+                CGSize(width: effectiveTileSize, height: runningIndicatorThickness)
             }
         case .image:
             if position.isVertical {

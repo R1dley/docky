@@ -33,8 +33,17 @@ final class DockSettingsService: ObservableObject {
     @Published private(set) var showRecents: Bool = true
     @Published private(set) var showProcessIndicators: Bool = true
 
+    /// Effective tile size used by every dock-rendering surface. Falls
+    /// through to the active theme's `behavior.tileSize` when the user
+    /// hasn't moved the size slider in this build; otherwise returns
+    /// the user's value. Override marking happens in `setTileSize`.
     var displayTileSize: CGFloat {
-        tileSize
+        if !DockyPreferences.shared.isAppearanceOverridden(Keys.tileSize),
+           let themed = ThemeManager.shared.activeManifest?.behavior?.tileSize,
+           themed > 0 {
+            return themed
+        }
+        return tileSize
     }
 
     private let defaults = UserDefaults.standard
@@ -59,16 +68,19 @@ final class DockSettingsService: ObservableObject {
             largeSize = tileSize
         }
         persistValues()
+        DockyPreferences.shared.markAppearanceOverride(Keys.tileSize)
     }
 
     func setLargeSize(_ size: CGFloat) {
         largeSize = max(tileSize, size)
         persistValues()
+        DockyPreferences.shared.markAppearanceOverride(Keys.largeSize)
     }
 
     func setMagnification(_ isEnabled: Bool) {
         magnification = isEnabled
         persistValues()
+        DockyPreferences.shared.markAppearanceOverride(Keys.magnification)
     }
 
     private func loadPersistedValues() {

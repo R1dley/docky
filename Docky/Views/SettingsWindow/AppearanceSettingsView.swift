@@ -720,7 +720,7 @@ struct AppearanceSettingsView: View {
 
     private var showsIndicatorColorControls: Bool {
         switch preferences.activeIndicatorShape {
-        case .dot, .pill:
+        case .dot, .pill, .underline:
             true
         case .none, .image:
             false

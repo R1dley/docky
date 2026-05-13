@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "windows-10",
+  "name": "Windows 10",
+  "author": "Docky",
+  "version": "1.0.0",
+  "description": "Flat, dark Windows 10 taskbar look: sharp-cornered chrome with a near-opaque charcoal fill, no glass, tight tile spacing, and a thin accent-blue running-app pill at the bottom edge.",
+  "behavior": {
+    "windowAxisSizing": "fullAxis",
+    "tileSize": 44
+  },
+  "appearance": {
+    "disablesGlassLook": true,
+    "iconShadow": {
+      "color": { "r": 0, "g": 0, "b": 0 },
+      "radius": 0,
+      "opacity": 0
+    },
+    "indicators": {
+      "shape": "underline",
+      "color": { "r": 0.0, "g": 0.4706, "b": 0.8431 },
+      "scale": 0.7,
+      "offset": 0,
+      "divider": {
+        "color": { "r": 1, "g": 1, "b": 1 },
+        "opacity": 0.15,
+        "paddingFraction": 0.15,
+        "imageScale": 1,
+        "offset": 0
+      }
+    },
+    "tile": {
+      "clipShape": "rounded",
+      "spacing": 4,
+      "verticalPadding": 4
+    },
+    "window": {
+      "clipShape": "rounded",
+      "cornerRadius": 0,
+      "contentInsets": { "top": 0, "leading": 0, "bottom": 0, "trailing": 0 },
+      "cornerRadii": {
+        "topLeading": 0,
+        "topTrailing": 0,
+        "bottomLeading": 0,
+        "bottomTrailing": 0
+      },
+      "backgroundImageMode": "fill",
+      "tintColor": { "r": 0.118, "g": 0.118, "b": 0.118 },
+      "tintOpacity": 0.92,
+      "borderColor": { "r": 1, "g": 1, "b": 1 },
+      "borderWidth": 0
+    }
+  }
+}

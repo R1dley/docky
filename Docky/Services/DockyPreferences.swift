@@ -562,6 +562,7 @@ enum DockTileIndicatorShape: String, CaseIterable, Identifiable {
     case none
     case dot
     case pill
+    case underline
     case image
 
     var id: String { rawValue }
@@ -571,6 +572,7 @@ enum DockTileIndicatorShape: String, CaseIterable, Identifiable {
         case .none: String(localized: "None")
         case .dot: String(localized: "Dot")
         case .pill: String(localized: "Pill")
+        case .underline: String(localized: "Underline")
         case .image: String(localized: "Custom Image")
         }
     }
@@ -872,6 +874,14 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         Keys.tileSpacing,
         Keys.tileClipShape,
         Keys.windowCornerRadius,
+        Keys.windowCornerRadiusTopLeading,
+        Keys.windowCornerRadiusTopTrailing,
+        Keys.windowCornerRadiusBottomLeading,
+        Keys.windowCornerRadiusBottomTrailing,
+        Keys.windowContentInsetTop,
+        Keys.windowContentInsetLeading,
+        Keys.windowContentInsetBottom,
+        Keys.windowContentInsetTrailing,
         Keys.windowClipShape,
         Keys.windowTintColor,
         Keys.windowTintOpacity,
@@ -908,7 +918,11 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
 
     /// Marks an appearance key as user-overridden. Idempotent.
     /// Called from every appearance setter alongside the persist write.
-    fileprivate func markAppearanceOverride(_ key: String) {
+    /// Internal (not fileprivate) so other services that own their own
+    /// preference storage (e.g. `DockSettingsService` for tile size /
+    /// magnification) can participate in the same override layer when a
+    /// theme tries to provide a `behavior.*` value.
+    func markAppearanceOverride(_ key: String) {
         guard !userOverriddenAppearanceKeys.contains(key) else { return }
         userOverriddenAppearanceKeys.insert(key)
         persistUserOverriddenAppearanceKeys()
@@ -973,6 +987,83 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
             guard windowCornerRadius != oldValue else { return }
             defaults.set(Double(windowCornerRadius), forKey: Keys.windowCornerRadius)
             markAppearanceOverride(Keys.windowCornerRadius)
+        }
+    }
+
+    /// Per-corner overrides; `nil` inherits `windowCornerRadius`. Lets a
+    /// theme keep only the screen-facing edge rounded (taskbar look).
+    var windowCornerRadiusTopLeading: CGFloat? {
+        didSet {
+            guard windowCornerRadiusTopLeading != oldValue else { return }
+            persistOptionalDouble(windowCornerRadiusTopLeading, forKey: Keys.windowCornerRadiusTopLeading)
+            markAppearanceOverride(Keys.windowCornerRadiusTopLeading)
+        }
+    }
+
+    var windowCornerRadiusTopTrailing: CGFloat? {
+        didSet {
+            guard windowCornerRadiusTopTrailing != oldValue else { return }
+            persistOptionalDouble(windowCornerRadiusTopTrailing, forKey: Keys.windowCornerRadiusTopTrailing)
+            markAppearanceOverride(Keys.windowCornerRadiusTopTrailing)
+        }
+    }
+
+    var windowCornerRadiusBottomLeading: CGFloat? {
+        didSet {
+            guard windowCornerRadiusBottomLeading != oldValue else { return }
+            persistOptionalDouble(windowCornerRadiusBottomLeading, forKey: Keys.windowCornerRadiusBottomLeading)
+            markAppearanceOverride(Keys.windowCornerRadiusBottomLeading)
+        }
+    }
+
+    var windowCornerRadiusBottomTrailing: CGFloat? {
+        didSet {
+            guard windowCornerRadiusBottomTrailing != oldValue else { return }
+            persistOptionalDouble(windowCornerRadiusBottomTrailing, forKey: Keys.windowCornerRadiusBottomTrailing)
+            markAppearanceOverride(Keys.windowCornerRadiusBottomTrailing)
+        }
+    }
+
+    /// Per-edge padding between the dock panel and the chrome view.
+    /// Defaults to 2pt; full-axis mode forces 0 at the
+    /// `MainWindowContainerView` layer regardless of this setting.
+    var windowContentInsetTop: CGFloat {
+        didSet {
+            guard windowContentInsetTop != oldValue else { return }
+            defaults.set(Double(windowContentInsetTop), forKey: Keys.windowContentInsetTop)
+            markAppearanceOverride(Keys.windowContentInsetTop)
+        }
+    }
+
+    var windowContentInsetLeading: CGFloat {
+        didSet {
+            guard windowContentInsetLeading != oldValue else { return }
+            defaults.set(Double(windowContentInsetLeading), forKey: Keys.windowContentInsetLeading)
+            markAppearanceOverride(Keys.windowContentInsetLeading)
+        }
+    }
+
+    var windowContentInsetBottom: CGFloat {
+        didSet {
+            guard windowContentInsetBottom != oldValue else { return }
+            defaults.set(Double(windowContentInsetBottom), forKey: Keys.windowContentInsetBottom)
+            markAppearanceOverride(Keys.windowContentInsetBottom)
+        }
+    }
+
+    var windowContentInsetTrailing: CGFloat {
+        didSet {
+            guard windowContentInsetTrailing != oldValue else { return }
+            defaults.set(Double(windowContentInsetTrailing), forKey: Keys.windowContentInsetTrailing)
+            markAppearanceOverride(Keys.windowContentInsetTrailing)
+        }
+    }
+
+    private func persistOptionalDouble(_ value: CGFloat?, forKey key: String) {
+        if let value {
+            defaults.set(Double(value), forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
         }
     }
 
@@ -1262,7 +1353,21 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard windowAxisSizing != oldValue else { return }
             defaults.set(windowAxisSizing.rawValue, forKey: Keys.windowAxisSizing)
+            markAppearanceOverride(Keys.windowAxisSizing)
         }
+    }
+
+    /// Theme-aware accessor. Falls through to the active theme's
+    /// `behavior.windowAxisSizing` when the user hasn't picked a value
+    /// of their own; otherwise returns the user's choice.
+    var effectiveWindowAxisSizing: DockWindowAxisSizing {
+        let themed = ThemeManager.shared.activeManifest?.behavior?.windowAxisSizing
+            .flatMap(DockWindowAxisSizing.init(rawValue:))
+        return appearanceOverride(
+            Keys.windowAxisSizing,
+            raw: windowAxisSizing,
+            themed: themed
+        )
     }
 
     /// Whether hovering an expandable widget tile presents the expanded preview window.
@@ -1850,6 +1955,90 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         )
     }
 
+    /// Resolves a single corner's radius. Layered the same as every
+    /// other appearance value (user override > theme value > fallback),
+    /// with the *fallback* being the uniform `effectiveWindowCornerRadius`
+    /// rather than a hardcoded default — so a theme that only specifies
+    /// e.g. `bottomLeading: 0` flattens just that corner and leaves the
+    /// rest at the uniform value.
+    private func effectiveCornerRadius(
+        userKey: String,
+        userValue: CGFloat?,
+        themed: CGFloat?
+    ) -> CGFloat {
+        if isAppearanceOverridden(userKey), let userValue {
+            return max(0, userValue)
+        }
+        if let themed {
+            return max(0, themed)
+        }
+        return effectiveWindowCornerRadius
+    }
+
+    var effectiveWindowCornerRadiusTopLeading: CGFloat {
+        effectiveCornerRadius(
+            userKey: Keys.windowCornerRadiusTopLeading,
+            userValue: windowCornerRadiusTopLeading,
+            themed: ThemeManager.shared.activeManifest?.appearance.window?.cornerRadii?.topLeading
+        )
+    }
+
+    var effectiveWindowCornerRadiusTopTrailing: CGFloat {
+        effectiveCornerRadius(
+            userKey: Keys.windowCornerRadiusTopTrailing,
+            userValue: windowCornerRadiusTopTrailing,
+            themed: ThemeManager.shared.activeManifest?.appearance.window?.cornerRadii?.topTrailing
+        )
+    }
+
+    var effectiveWindowCornerRadiusBottomLeading: CGFloat {
+        effectiveCornerRadius(
+            userKey: Keys.windowCornerRadiusBottomLeading,
+            userValue: windowCornerRadiusBottomLeading,
+            themed: ThemeManager.shared.activeManifest?.appearance.window?.cornerRadii?.bottomLeading
+        )
+    }
+
+    var effectiveWindowCornerRadiusBottomTrailing: CGFloat {
+        effectiveCornerRadius(
+            userKey: Keys.windowCornerRadiusBottomTrailing,
+            userValue: windowCornerRadiusBottomTrailing,
+            themed: ThemeManager.shared.activeManifest?.appearance.window?.cornerRadii?.bottomTrailing
+        )
+    }
+
+    var effectiveWindowContentInsetTop: CGFloat {
+        appearanceOverride(
+            Keys.windowContentInsetTop,
+            raw: windowContentInsetTop,
+            themed: ThemeManager.shared.activeManifest?.appearance.window?.contentInsets?.top
+        )
+    }
+
+    var effectiveWindowContentInsetLeading: CGFloat {
+        appearanceOverride(
+            Keys.windowContentInsetLeading,
+            raw: windowContentInsetLeading,
+            themed: ThemeManager.shared.activeManifest?.appearance.window?.contentInsets?.leading
+        )
+    }
+
+    var effectiveWindowContentInsetBottom: CGFloat {
+        appearanceOverride(
+            Keys.windowContentInsetBottom,
+            raw: windowContentInsetBottom,
+            themed: ThemeManager.shared.activeManifest?.appearance.window?.contentInsets?.bottom
+        )
+    }
+
+    var effectiveWindowContentInsetTrailing: CGFloat {
+        appearanceOverride(
+            Keys.windowContentInsetTrailing,
+            raw: windowContentInsetTrailing,
+            themed: ThemeManager.shared.activeManifest?.appearance.window?.contentInsets?.trailing
+        )
+    }
+
     var effectiveWindowClipShape: DockClipShape {
         let themed = ThemeManager.shared.activeManifest?.appearance.window?.clipShape
             .flatMap(DockClipShape.init(rawValue:))
@@ -2402,6 +2591,14 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         static let tileSpacing = "docky.tileSpacing"
         static let tileClipShape = "docky.tileClipShape"
         static let windowCornerRadius = "docky.windowCornerRadius"
+        static let windowCornerRadiusTopLeading = "docky.windowCornerRadiusTopLeading"
+        static let windowCornerRadiusTopTrailing = "docky.windowCornerRadiusTopTrailing"
+        static let windowCornerRadiusBottomLeading = "docky.windowCornerRadiusBottomLeading"
+        static let windowCornerRadiusBottomTrailing = "docky.windowCornerRadiusBottomTrailing"
+        static let windowContentInsetTop = "docky.windowContentInsetTop"
+        static let windowContentInsetLeading = "docky.windowContentInsetLeading"
+        static let windowContentInsetBottom = "docky.windowContentInsetBottom"
+        static let windowContentInsetTrailing = "docky.windowContentInsetTrailing"
         static let windowClipShape = "docky.windowClipShape"
         static let windowTintColor = "docky.windowTintColor"
         static let windowTintOpacity = "docky.windowTintOpacity"
@@ -2483,6 +2680,8 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         static let tileSpacing: CGFloat = 0
         static let tileClipShape: DockClipShape = .rounded
         static let windowCornerRadius: CGFloat = 24
+        static let windowCornerRadiusPerCorner: CGFloat? = nil
+        static let windowContentInset: CGFloat = 2
         static let windowClipShape: DockClipShape = .rounded
         static let windowTintColor: DockColor? = nil
         static let windowTintOpacity: CGFloat = 0.22
@@ -2563,6 +2762,14 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         let storedTileSpacing = defaults.object(forKey: Keys.tileSpacing) as? Double
         let storedTileClipShape = defaults.string(forKey: Keys.tileClipShape)
         let storedWindowCornerRadius = defaults.object(forKey: Keys.windowCornerRadius) as? Double
+        let storedWindowCornerRadiusTopLeading = defaults.object(forKey: Keys.windowCornerRadiusTopLeading) as? Double
+        let storedWindowCornerRadiusTopTrailing = defaults.object(forKey: Keys.windowCornerRadiusTopTrailing) as? Double
+        let storedWindowCornerRadiusBottomLeading = defaults.object(forKey: Keys.windowCornerRadiusBottomLeading) as? Double
+        let storedWindowCornerRadiusBottomTrailing = defaults.object(forKey: Keys.windowCornerRadiusBottomTrailing) as? Double
+        let storedWindowContentInsetTop = defaults.object(forKey: Keys.windowContentInsetTop) as? Double
+        let storedWindowContentInsetLeading = defaults.object(forKey: Keys.windowContentInsetLeading) as? Double
+        let storedWindowContentInsetBottom = defaults.object(forKey: Keys.windowContentInsetBottom) as? Double
+        let storedWindowContentInsetTrailing = defaults.object(forKey: Keys.windowContentInsetTrailing) as? Double
         let storedWindowClipShape = defaults.string(forKey: Keys.windowClipShape)
         let storedWindowTintColor = defaults.data(forKey: Keys.windowTintColor)
         let storedWindowTintOpacity = defaults.object(forKey: Keys.windowTintOpacity) as? Double
@@ -2641,6 +2848,14 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         self.tileSpacing = storedTileSpacing.map { CGFloat($0) } ?? DefaultValues.tileSpacing
         self.tileClipShape = (storedTileClipShape.flatMap(DockClipShape.init(rawValue:)) ?? DefaultValues.tileClipShape)
         self.windowCornerRadius = storedWindowCornerRadius.map { CGFloat($0) } ?? DefaultValues.windowCornerRadius
+        self.windowCornerRadiusTopLeading = storedWindowCornerRadiusTopLeading.map { CGFloat($0) }
+        self.windowCornerRadiusTopTrailing = storedWindowCornerRadiusTopTrailing.map { CGFloat($0) }
+        self.windowCornerRadiusBottomLeading = storedWindowCornerRadiusBottomLeading.map { CGFloat($0) }
+        self.windowCornerRadiusBottomTrailing = storedWindowCornerRadiusBottomTrailing.map { CGFloat($0) }
+        self.windowContentInsetTop = storedWindowContentInsetTop.map { CGFloat($0) } ?? DefaultValues.windowContentInset
+        self.windowContentInsetLeading = storedWindowContentInsetLeading.map { CGFloat($0) } ?? DefaultValues.windowContentInset
+        self.windowContentInsetBottom = storedWindowContentInsetBottom.map { CGFloat($0) } ?? DefaultValues.windowContentInset
+        self.windowContentInsetTrailing = storedWindowContentInsetTrailing.map { CGFloat($0) } ?? DefaultValues.windowContentInset
         self.windowClipShape = (storedWindowClipShape.flatMap(DockClipShape.init(rawValue:)) ?? DefaultValues.windowClipShape)
         self.windowTintColor = Self.decodeColor(from: storedWindowTintColor) ?? DefaultValues.windowTintColor
         self.windowTintOpacity = storedWindowTintOpacity.map { CGFloat($0) } ?? DefaultValues.windowTintOpacity

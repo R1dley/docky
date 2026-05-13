@@ -10,10 +10,12 @@ import Combine
 import SwiftUI
 
 final class MainWindowContainerView: NSView {
-    static let contentPadding: CGFloat = 2
-
     private let contentView = ClickThroughHostingView(rootView: MainWindowView())
     private var trackingArea: NSTrackingArea?
+    private var topConstraint: NSLayoutConstraint!
+    private var bottomConstraint: NSLayoutConstraint!
+    private var leadingConstraint: NSLayoutConstraint!
+    private var trailingConstraint: NSLayoutConstraint!
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -29,12 +31,54 @@ final class MainWindowContainerView: NSView {
         contentView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(contentView)
 
+        topConstraint = contentView.topAnchor.constraint(equalTo: topAnchor)
+        bottomConstraint = bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+        leadingConstraint = contentView.leadingAnchor.constraint(equalTo: leadingAnchor)
+        trailingConstraint = trailingAnchor.constraint(equalTo: contentView.trailingAnchor)
+
         NSLayoutConstraint.activate([
-            contentView.topAnchor.constraint(equalTo: topAnchor, constant: Self.contentPadding),
-            contentView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Self.contentPadding),
-            contentView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.contentPadding),
-            contentView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.contentPadding),
+            topConstraint, bottomConstraint, leadingConstraint, trailingConstraint
         ])
+
+        applyContentInsets()
+        observePreferencesForInsets()
+    }
+
+    /// Re-applies the per-edge content padding. Full-axis mode forces
+    /// every edge to 0 so the chrome bleeds to the panel border; in
+    /// fit-content mode each edge picks up its own theme/user override
+    /// from `DockyPreferences`.
+    private func applyContentInsets() {
+        let prefs = DockyPreferences.shared
+        let fullAxis = prefs.effectiveWindowAxisSizing == .fullAxis
+        let top = fullAxis ? 0 : prefs.effectiveWindowContentInsetTop
+        let leading = fullAxis ? 0 : prefs.effectiveWindowContentInsetLeading
+        let bottom = fullAxis ? 0 : prefs.effectiveWindowContentInsetBottom
+        let trailing = fullAxis ? 0 : prefs.effectiveWindowContentInsetTrailing
+        topConstraint.constant = top
+        bottomConstraint.constant = bottom
+        leadingConstraint.constant = leading
+        trailingConstraint.constant = trailing
+    }
+
+    /// Observation-framework wiring: every read inside the closure is
+    /// tracked; the `onChange` callback fires once per change, then we
+    /// re-register by recursing. Same pattern AppKit code elsewhere in
+    /// the project uses to bridge from `@Observable` into NSView land.
+    private func observePreferencesForInsets() {
+        withObservationTracking {
+            _ = DockyPreferences.shared.effectiveWindowAxisSizing
+            _ = DockyPreferences.shared.effectiveWindowContentInsetTop
+            _ = DockyPreferences.shared.effectiveWindowContentInsetLeading
+            _ = DockyPreferences.shared.effectiveWindowContentInsetBottom
+            _ = DockyPreferences.shared.effectiveWindowContentInsetTrailing
+        } onChange: { [weak self] in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.applyContentInsets()
+                self.observePreferencesForInsets()
+            }
+        }
     }
 
     override func updateTrackingAreas() {
@@ -287,7 +331,7 @@ final class MainWindow: NSPanel {
             _ = preferences.effectiveTileVerticalPadding
             _ = preferences.effectiveTileSpacing
             _ = preferences.overflowBehavior
-            _ = preferences.windowAxisSizing
+            _ = preferences.effectiveWindowAxisSizing
             _ = preferences.windowPosition
             _ = preferences.windowDisplayTarget
             self.applyCurrentFrame(animated: true, duration: self.tileMutationAnimationDuration)
@@ -570,7 +614,16 @@ final class MainWindow: NSPanel {
     private func applyCurrentFrame(animated: Bool, duration: TimeInterval?) {
         let screenBounds = targetScreen()?.frame ?? screen?.frame ?? NSScreen.main?.frame ?? .zero
         lastPointerScreenFrame = screenBounds
-        let contentPadding = MainWindowContainerView.contentPadding
+        // Window-frame math needs the *total* horizontal and vertical
+        // padding the chrome view leaves around itself inside the panel.
+        // Per-edge insets live in `DockyPreferences`; full-axis mode
+        // forces them to zero in `MainWindowContainerView` and we
+        // mirror that here so the panel sizing stays in sync.
+        let fullAxis = preferences.effectiveWindowAxisSizing == .fullAxis
+        let horizontalContentPadding: CGFloat = fullAxis ? 0
+            : preferences.effectiveWindowContentInsetLeading + preferences.effectiveWindowContentInsetTrailing
+        let verticalContentPadding: CGFloat = fullAxis ? 0
+            : preferences.effectiveWindowContentInsetTop + preferences.effectiveWindowContentInsetBottom
         let position = preferences.windowPosition.resolved(systemOrientation: dockSettings.orientation)
         let baseTileSize = dockSettings.displayTileSize
         let baseTileHeight = baseTileSize + preferences.effectiveTileVerticalPadding * 2
@@ -604,9 +657,10 @@ final class MainWindow: NSPanel {
             tileSpacing: preferences.effectiveTileSpacing,
             position: position
         )
+        let alongAxisContentPadding = position.isVertical ? verticalContentPadding : horizontalContentPadding
         let unreservedAvailableAxisLength = max(
             0,
-            axisLength(of: screenBounds.size, position: position) - contentPadding * 2
+            axisLength(of: screenBounds.size, position: position) - alongAxisContentPadding
         )
         let contentAvailableAxisLength = max(
             0,
@@ -617,7 +671,7 @@ final class MainWindow: NSPanel {
                     position: position
                 ) ? reservedStatusBarLength : 0)
         )
-        let availableAxisLength = preferences.windowAxisSizing == .fullAxis
+        let availableAxisLength = preferences.effectiveWindowAxisSizing == .fullAxis
             ? unreservedAvailableAxisLength
             : contentAvailableAxisLength
         let compactsWidgetsForOverflow = shouldCompactWidgetsForOverflow(
@@ -653,7 +707,7 @@ final class MainWindow: NSPanel {
             compactWidgets: compactsWidgetsForOverflow,
             edgePadding: TileContainerView.edgePadding * contentScale
         )
-        let displayedChromeAxisLength = preferences.windowAxisSizing == .fullAxis
+        let displayedChromeAxisLength = preferences.effectiveWindowAxisSizing == .fullAxis
             ? availableAxisLength
             : min(axisLength(of: displayedContentSize, position: position), availableAxisLength)
         layout.setChromeSize(displayedChromeSize(
@@ -687,13 +741,13 @@ final class MainWindow: NSPanel {
             for: windowContentSize,
             displayedAxisLength: displayedAxisLength,
             availableAxisLength: availableAxisLength,
-            contentPadding: contentPadding,
+            horizontalContentPadding: horizontalContentPadding,
             position: position
         )
         let height = displayedWindowHeight(
             for: windowContentSize,
             displayedAxisLength: displayedAxisLength,
-            contentPadding: contentPadding,
+            verticalContentPadding: verticalContentPadding,
             position: position
         )
         let size = CGSize(width: width, height: height)
@@ -780,30 +834,30 @@ final class MainWindow: NSPanel {
         for contentSize: CGSize,
         displayedAxisLength: CGFloat,
         availableAxisLength: CGFloat,
-        contentPadding: CGFloat,
+        horizontalContentPadding: CGFloat,
         position: ResolvedDockWindowPosition
     ) -> CGFloat {
         if position.isVertical {
-            return contentSize.width + contentPadding * 2
+            return contentSize.width + horizontalContentPadding
         }
 
         let visibleAxisLength = availableAxisLength > 0
             ? min(max(minimumWidth, displayedAxisLength), availableAxisLength)
             : max(minimumWidth, displayedAxisLength)
-        return visibleAxisLength + contentPadding * 2
+        return visibleAxisLength + horizontalContentPadding
     }
 
     private func displayedWindowHeight(
         for contentSize: CGSize,
         displayedAxisLength: CGFloat,
-        contentPadding: CGFloat,
+        verticalContentPadding: CGFloat,
         position: ResolvedDockWindowPosition
     ) -> CGFloat {
         if position.isVertical {
-            return displayedAxisLength + contentPadding * 2
+            return displayedAxisLength + verticalContentPadding
         }
 
-        return contentSize.height + contentPadding * 2
+        return contentSize.height + verticalContentPadding
     }
 
     private func displayedChromeSize(

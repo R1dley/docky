@@ -47,6 +47,23 @@ struct ThemeManifest: Codable, Equatable {
     let description: String?
 
     let appearance: ThemeAppearance
+
+    /// Optional behavior overrides (sizing modes, default tile size, etc).
+    /// Same layered-read semantics as `appearance`: a `nil` field falls
+    /// through to the user's preference, and any user-overridden key
+    /// stays on the user's value even while the theme is active.
+    var behavior: ThemeBehavior?
+}
+
+struct ThemeBehavior: Codable, Equatable {
+    /// Raw value of `DockWindowAxisSizing` ("fitContent" or "fullAxis").
+    var windowAxisSizing: String?
+    /// Resting tile (icon) size in points.
+    var tileSize: CGFloat?
+    /// Magnified icon size in points; ignored when `< tileSize`.
+    var largeSize: CGFloat?
+    /// Whether magnification is on by default for this theme.
+    var magnification: Bool?
 }
 
 struct ThemeAppearance: Codable, Equatable {
@@ -71,6 +88,16 @@ struct ThemeWindow: Codable, Equatable {
     /// Raw value of `DockClipShape`.
     var clipShape: String?
     var cornerRadius: CGFloat?
+    /// Per-corner overrides for `cornerRadius`. Each field that is set
+    /// overrides only that corner; unset fields inherit the uniform
+    /// `cornerRadius` value. Useful for "flush against the screen edge"
+    /// looks (taskbar-style: top corners rounded, bottom corners 0).
+    var cornerRadii: ThemeCornerValues?
+    /// Per-edge padding between the panel and the chrome view. When
+    /// any field is set it overrides that edge's default (2pt). Set
+    /// to 0 to bleed the chrome to the panel edge; force-zero is
+    /// applied automatically in full-axis mode regardless.
+    var contentInsets: ThemeEdgeValues?
     /// Path relative to `<bundle>/`.
     var backgroundImage: String?
     /// Raw value of `DockBackgroundImageMode` ("fill" or "sprite").
@@ -83,6 +110,20 @@ struct ThemeWindow: Codable, Equatable {
     var borderColor: ThemeColor?
     /// Stroke width in points. Ignored when `borderColor` is nil.
     var borderWidth: CGFloat?
+}
+
+struct ThemeEdgeValues: Codable, Equatable {
+    var top: CGFloat?
+    var leading: CGFloat?
+    var bottom: CGFloat?
+    var trailing: CGFloat?
+}
+
+struct ThemeCornerValues: Codable, Equatable {
+    var topLeading: CGFloat?
+    var topTrailing: CGFloat?
+    var bottomLeading: CGFloat?
+    var bottomTrailing: CGFloat?
 }
 
 struct ThemeIndicators: Codable, Equatable {
