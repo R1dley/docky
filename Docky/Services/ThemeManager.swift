@@ -113,6 +113,32 @@ import Observation
         return nil
     }
 
+    /// Bundle identifiers of every per-app icon the active theme
+    /// ships in its `assets/` directory. Filenames whose stems
+    /// contain a dot (the macOS reverse-DNS pattern) are treated as
+    /// bundle ids; anything else is treated as a regular manifest
+    /// asset and skipped here. Used by the export flow to decide
+    /// which per-app icons to bundle into the new theme.
+    func activeAppIconBundleIDs() -> [String] {
+        guard let activeBundleURL else { return [] }
+        let assetsDir = activeBundleURL.appending(path: "assets", directoryHint: .isDirectory)
+        guard let entries = try? fileManager.contentsOfDirectory(
+            at: assetsDir,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        return entries.compactMap { url in
+            let ext = url.pathExtension.lowercased()
+            guard ext == "png" || ext == "jpg" || ext == "jpeg" else { return nil }
+            let stem = url.deletingPathExtension().lastPathComponent
+            guard stem.contains(".") else { return nil }
+            return stem
+        }
+    }
+
     // MARK: - Mutation
 
     /// Activate an installed theme by id. No-op (logs) when the id
@@ -333,6 +359,7 @@ import Observation
 
         let copier = AssetCopier(assetsDir: assetsDir)
         let manifest = Self.buildExportManifest(id: id, name: trimmedName, copier: copier)
+        Self.copyPerAppIcons(into: copier)
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -413,6 +440,27 @@ import Observation
             description: nil,
             appearance: appearance
         )
+    }
+
+    /// Bundles every per-app icon — user-set overrides ∪ icons the
+    /// active theme ships — into the export's `assets/` directory as
+    /// `<bundle-id>.<ext>`. Convention-named, so the recipient picks
+    /// them up automatically when the exported theme is activated.
+    private static func copyPerAppIcons(into copier: AssetCopier) {
+        let prefs = DockyPreferences.shared
+        var bundleIdentifiers = Set<String>()
+        bundleIdentifiers.formUnion(prefs.appIconOverrides.map(\.bundleIdentifier))
+        bundleIdentifiers.formUnion(ThemeManager.shared.activeAppIconBundleIDs())
+
+        for bundleIdentifier in bundleIdentifiers {
+            guard let sourceURL = prefs.effectiveAppIconOverrideURL(
+                forBundleIdentifier: bundleIdentifier
+            ) else { continue }
+
+            let sourceExt = sourceURL.pathExtension.lowercased()
+            let preservedExt = ["png", "jpg", "jpeg"].contains(sourceExt) ? sourceExt : "png"
+            copier.copyAt(sourceURL, named: "\(bundleIdentifier).\(preservedExt)")
+        }
     }
 
     private static func createZip(of sourceDirectory: URL, at destination: URL) throws {
@@ -537,6 +585,26 @@ private final class AssetCopier {
         copiedRelativePaths[sourceURL] = relative
         usedNames.insert(destination.lastPathComponent)
         return relative
+    }
+
+    /// Copies an asset to a fixed destination filename (used for
+    /// convention-named files like `<bundle-id>.<ext>` where the
+    /// recipient discovers the file by name rather than via the
+    /// manifest). No-op if the destination already exists.
+    func copyAt(_ sourceURL: URL, named fixedName: String) {
+        guard !usedNames.contains(fixedName) else { return }
+        let destination = assetsDir.appending(path: fixedName, directoryHint: .notDirectory)
+        guard !fileManager.fileExists(atPath: destination.path) else {
+            usedNames.insert(fixedName)
+            return
+        }
+        do {
+            try fileManager.copyItem(at: sourceURL, to: destination)
+        } catch {
+            return
+        }
+        usedNames.insert(fixedName)
+        copiedRelativePaths[sourceURL] = "assets/\(fixedName)"
     }
 
     private func uniqueDestination(for sourceURL: URL) -> URL {

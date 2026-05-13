@@ -176,6 +176,17 @@ private struct AppIconOverrideRow: View {
                     }
                     .disabled(!product.isUnlocked(.customAppIcons))
 
+                    if let themeIconURL {
+                        Button("Use Theme Icon") {
+                            preferences.setAppIconOverride(
+                                bundleIdentifier: entry.bundleIdentifier,
+                                iconPath: themeIconURL.path
+                            )
+                        }
+                        .disabled(!product.isUnlocked(.customAppIcons))
+                        .help("Pin the active theme's icon for this app as your override. Without this, the theme icon already applies; pinning it preserves the choice if you switch themes.")
+                    }
+
                     if overrideEntry != nil {
                         Button("Clear") {
                             preferences.removeAppIconOverride(bundleIdentifier: entry.bundleIdentifier)
@@ -189,6 +200,13 @@ private struct AppIconOverrideRow: View {
                 paddingSlider
             }
         }
+    }
+
+    /// Theme-supplied icon for this app, if the active theme ships
+    /// one. `nil` when no theme is active or the theme doesn't have
+    /// an `assets/<bundle-id>.<png|jpg|jpeg>` file.
+    private var themeIconURL: URL? {
+        ThemeManager.shared.activeAppIconURL(forBundleIdentifier: entry.bundleIdentifier)
     }
 
     /// Per-icon padding slider, shown only when an override is set. The
@@ -237,10 +255,16 @@ private struct AppIconOverrideRow: View {
         return URL(fileURLWithPath: iconPath).lastPathComponent
     }
 
+    /// Mirrors what the dock actually renders: user override → active
+    /// theme icon → system icon. Reading via
+    /// `effectiveAppIconOverrideURL` keeps this in lockstep with the
+    /// tile views so the settings preview never disagrees with the
+    /// running dock.
     private var previewImage: NSImage {
-        if let overrideURL = overrideEntry?.effectiveIconURL,
-           let overrideImage = IconCacheService.shared.image(forImageFileURL: overrideURL) {
-            return overrideImage
+        if let effectiveURL = preferences.effectiveAppIconOverrideURL(
+            forBundleIdentifier: entry.bundleIdentifier
+        ), let image = IconCacheService.shared.image(forImageFileURL: effectiveURL) {
+            return image
         }
 
         return entry.systemIcon
