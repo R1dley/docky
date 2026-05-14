@@ -437,7 +437,7 @@ struct AppearanceSettingsView: View {
                     }
                 }
 
-                Text("Shrinks the rendered icon inside each tile without changing the tile's layout box — useful for Windows-style chunky tile slots.")
+                Text("Shrinks the rendered icon inside each tile without changing the tile's layout box. Useful for Windows-style chunky tile slots.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

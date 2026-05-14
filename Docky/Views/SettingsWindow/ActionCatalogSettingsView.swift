@@ -12,7 +12,7 @@ struct ActionCatalogSettingsView: View {
     var body: some View {
         Form {
             Section("About Actions") {
-                Text("Actions are menu items Docky injects into each tile's right-click menu. A catalog package ships a curated bundle of them; once it's loaded, every action it defines is automatically available on the matching tile type — apps, folders, the Trash, the Launchpad, and the divider all get their own set, with no per-tile setup needed.")
+                Text("Actions are menu items Docky injects into each tile's right-click menu. A catalog package ships a curated bundle of them; once it's loaded, every action it defines is automatically available on the matching tile type. Apps, folders, the Trash, the Launchpad, and the divider all get their own set, with no per-tile setup needed.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
