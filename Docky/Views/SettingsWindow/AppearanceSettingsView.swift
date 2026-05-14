@@ -572,7 +572,7 @@ struct AppearanceSettingsView: View {
                 }
                 .disabled(!hasActiveBackgroundSource)
 
-                Text("Background fill drawn under every running app tile — independent of hover. Useful for taskbar-style \"highlighted active app\" looks.")
+                Text("Background fill drawn under every running app tile, independent of hover. Useful for taskbar-style \"highlighted active app\" looks.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -789,7 +789,7 @@ struct AppearanceSettingsView: View {
                 effectiveRadius: preferences.effectiveWidgetCornerRadius(for: .three)
             )
 
-            Text("Each rendering size can opt into its own content padding and corner radius. Unset values inherit the tile-chrome defaults — useful for letting wide widgets bleed edge-to-edge while keeping the 1x form rounded.")
+            Text("Each rendering size can opt into its own content padding and corner radius. Unset values inherit the tile-chrome defaults, useful for letting wide widgets bleed edge-to-edge while keeping the 1x form rounded.")
                 .foregroundStyle(.secondary)
                 .font(.caption)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1351,7 +1351,7 @@ struct AppearanceSettingsView: View {
         // Three-state row: the toggle is the user's *intent* (override this
         // corner or inherit the uniform value); the slider only matters
         // when the override is on. Mirrors `usesCustomWindowBorderBinding`
-        // pattern — flipping the toggle off restores nil + clears the
+        // pattern, flipping the toggle off restores nil + clears the
         // appearance-override flag so the theme/uniform value comes back.
         let usesOverride = Binding<Bool>(
             get: { binding.wrappedValue != nil },

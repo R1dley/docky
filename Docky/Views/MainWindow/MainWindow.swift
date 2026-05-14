@@ -116,7 +116,7 @@ final class MainWindowContainerView: NSView {
     }
 
     /// Pushes the live pointer position into the magnification service in
-    /// the hosting view's top-left origin coordinate space — same as what
+    /// the hosting view's top-left origin coordinate space, same as what
     /// SwiftUI sees via `GeometryProxy.frame(in: .global)`. Caller flips Y
     /// when the underlying NSHostingView isn't already flipped.
     ///
@@ -124,7 +124,7 @@ final class MainWindowContainerView: NSView {
     /// strip. The window is taller (or wider, for side docks) than the
     /// chrome to make room for magnified icons, so a window-wide tracking
     /// area would magnify tiles as soon as the pointer entered the empty
-    /// headroom above the chrome — well before it ever touched a tile.
+    /// headroom above the chrome, well before it ever touched a tile.
     private func forwardMagnificationPointer(from event: NSEvent) {
         let inHosting = contentView.convert(event.locationInWindow, from: nil)
         let topLeft: CGPoint = contentView.isFlipped
@@ -159,15 +159,15 @@ final class MainWindowContainerView: NSView {
 }
 
 /// NSPanel (not NSWindow) so the `.nonactivatingPanel` style mask actually
-/// takes effect — that's the only way to keep clicks on the dock from
+/// takes effect, that's the only way to keep clicks on the dock from
 /// activating Docky as a foreground app, which would otherwise break
 /// frontmost-tracked behaviors (cycle windows on tile click, hide-on-second-click).
 final class MainWindow: NSPanel {
     /// We default to `false` so tile clicks don't bring Docky to the
     /// foreground (frontmost-tracked behaviors like cycle-on-click rely
     /// on the previously-frontmost app staying key). Embedded controls
-    /// that need keyboard input — currently only the Search widget's
-    /// 2x/3x text field — set `allowsKeyWindow` to `true` while focused
+    /// that need keyboard input, currently only the Search widget's
+    /// 2x/3x text field, set `allowsKeyWindow` to `true` while focused
     /// so SwiftUI can route keystrokes into them, then flip it back off
     /// on resign.
     static var allowsKeyWindow: Bool = false
@@ -333,7 +333,7 @@ final class MainWindow: NSPanel {
 
         observeChanges { [weak self] in
             guard let self else { return }
-            // Touch every preference that drives frame layout — the
+            // Touch every preference that drives frame layout, the
             // Observation framework tracks these reads and re-runs the
             // closure on any change.
             _ = preferences.effectiveTileVerticalPadding
@@ -731,7 +731,7 @@ final class MainWindow: NSPanel {
         // chrome itself keeps its resting shape and the icons spill into
         // the headroom above (or beside, on a vertical dock) it. Peak
         // size is the UNscaled `largeSize` even when overflow has shrunk
-        // the resting tiles — so headroom is measured from the scaled
+        // the resting tiles, so headroom is measured from the scaled
         // chrome height up to that fixed peak.
         let scaledBaseTileSize = dockSettings.tileSize * contentScale
         let magnificationHeadroom: CGFloat = (

@@ -895,7 +895,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
     /// Persisted to `UserDefaults` so override status survives relaunch.
     /// Populated on first launch via the migration in `init` (any key
     /// already present in `UserDefaults` at upgrade time is treated as
-    /// user-overridden — better to over-respect existing customizations
+    /// user-overridden, better to over-respect existing customizations
     /// than to let a theme silently replace them).
     var userOverriddenAppearanceKeys: Set<String> = []
 
@@ -983,7 +983,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
     }
 
     /// Clears the override flag for a single appearance key. The
-    /// stored value is left untouched — `effective<X>` simply starts
+    /// stored value is left untouched, `effective<X>` simply starts
     /// preferring the theme value (or built-in default). Used by the
     /// Settings UI "revert to theme" affordance.
     func clearAppearanceOverride(_ key: String) {
@@ -1035,7 +1035,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    /// Extra padding inside each tile around the icon — shrinks the
+    /// Extra padding inside each tile around the icon, shrinks the
     /// rendered icon while leaving the tile bounds untouched.
     var tileIconPadding: CGFloat {
         didSet {
@@ -1122,7 +1122,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    /// Active-tile background — same surface as the hover background
+    /// Active-tile background, same surface as the hover background
     /// but painted under every running app tile, regardless of hover.
     /// Used together with the underline / dot / pill indicator for
     /// Windows-style "highlighted active app" looks.
@@ -1179,9 +1179,9 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
     /// default; widgets at that span fall through to
     /// `nonAppContentPadding` / `nonAppTileCornerRadius` (the tile
     /// chrome inset + global clip-shape). Setting any of these
-    /// lets a theme (or the user) tune individual rendering sizes —
+    /// lets a theme (or the user) tune individual rendering sizes ,
     /// e.g. 3x widgets with zero padding and zero corner radius for
-    /// a Windows-style edge-to-edge look — without affecting 1x/2x.
+    /// a Windows-style edge-to-edge look, without affecting 1x/2x.
     var widget1xContentPadding: CGFloat? {
         didSet {
             guard widget1xContentPadding != oldValue else { return }
@@ -1280,7 +1280,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
 
     /// Resolves the effective content padding override for a widget
     /// rendered at the given span. Returns `nil` if neither the user
-    /// nor the theme provided one — caller falls back to its own
+    /// nor the theme provided one, caller falls back to its own
     /// default (typically `nonAppContentPadding`).
     func effectiveWidgetContentPadding(for span: TileSpan) -> CGFloat? {
         let (userKey, userValue) = widgetContentPaddingPair(for: span)
@@ -1495,7 +1495,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
 
     /// Optional drop shadow color applied behind icon-bearing tiles.
     /// `nil` disables the shadow regardless of the radius/opacity
-    /// values — those are kept around so the user's slider state
+    /// values, those are kept around so the user's slider state
     /// persists across toggles.
     var iconShadowColor: DockColor? {
         didSet {
@@ -1812,7 +1812,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
 
     /// When true, Docky hides while a fullscreen app is on its target
     /// screen and reveals on edge dwell (gated by `fullscreenRevealDelay`).
-    /// Default true — matches the system Dock and what existed before this
+    /// Default true, matches the system Dock and what existed before this
     /// preference was added. Turning it off keeps Docky pinned over
     /// fullscreen apps.
     var hidesDuringFullscreen: Bool {
@@ -2303,7 +2303,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
     // built-in default when the key isn't in UserDefaults).
     //
     // Consumers in `Views/` should read `effective<X>` rather than
-    // the raw stored property. Settings UI is the exception — its
+    // the raw stored property. Settings UI is the exception, its
     // sliders/pickers bind to the raw stored property so the user
     // sees and edits their own value, not the theme's.
 
@@ -2473,7 +2473,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
     /// Resolves a single corner's radius. Layered the same as every
     /// other appearance value (user override > theme value > fallback),
     /// with the *fallback* being the uniform `effectiveWindowCornerRadius`
-    /// rather than a hardcoded default — so a theme that only specifies
+    /// rather than a hardcoded default, so a theme that only specifies
     /// e.g. `bottomLeading: 0` flattens just that corner and leaves the
     /// rest at the uniform value.
     private func effectiveCornerRadius(
@@ -2801,7 +2801,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
 
     // MARK: - Explicit appearance values (for theme export)
     //
-    // Returns the color when it comes from a deliberate source —
+    // Returns the color when it comes from a deliberate source ,
     // either a user override on this preference or the active theme's
     // manifest. Returns `nil` when the only value would be the
     // built-in system fallback, because that isn't meaningfully
@@ -2897,7 +2897,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         }
         // Theme-supplied icons are convention-based: `assets/<bundle-id>.png`
         // inside the active theme bundle. Not gated by the Pro
-        // `customAppIcons` flag — consistent with how other
+        // `customAppIcons` flag, consistent with how other
         // theme-supplied appearance values flow through unconditionally.
         return ThemeManager.shared.activeAppIconURL(forBundleIdentifier: bundleIdentifier)
     }
@@ -2925,7 +2925,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
     }
 
     /// Updates only the padding for an existing override. No-op when the
-    /// app has no override yet — callers should set an icon first.
+    /// app has no override yet, callers should set an icon first.
     func setAppIconPaddingFraction(bundleIdentifier: String, paddingFraction: CGFloat?) {
         guard let existing = appIconOverrides.first(where: { $0.bundleIdentifier == bundleIdentifier }) else {
             return
@@ -3085,7 +3085,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
             return
         }
         // Docky never shows itself anywhere, so adding it to the
-        // hidden-apps list would be a confusing no-op — refuse it.
+        // hidden-apps list would be a confusing no-op, refuse it.
         if bundleIdentifier == Bundle.main.bundleIdentifier {
             return
         }
@@ -3529,7 +3529,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         // Load the user-override set, then run the one-shot migration
         // that infers overrides from existing UserDefaults presence.
         // After this runs once, the set is the authoritative source of
-        // truth — appearance setters maintain it from then on.
+        // truth, appearance setters maintain it from then on.
         if let storedOverrideKeys = defaults.stringArray(forKey: Keys.userOverriddenAppearanceKeys) {
             self.userOverriddenAppearanceKeys = Set(storedOverrideKeys)
                 .intersection(Self.appearanceKeys)
@@ -3581,7 +3581,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
     /// Resets only the preferences exposed in Settings → Appearance
     /// (General, Indicators, Tile Layout, Window Shape, Window
     /// Background). App-icon overrides, behavior, widgets, launchpad,
-    /// window-management, and system-dock settings are untouched —
+    /// window-management, and system-dock settings are untouched ,
     /// callers that want a full wipe should call `resetToDefaults()`
     /// instead.
     func resetAppearanceToDefaults() {
@@ -3722,7 +3722,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         // would survive without an explicit wipe. The behavior keys
         // currently in `appearanceKeys` (windowAxisSizing, tileSize,
         // largeSize, magnification) get their override status cleared
-        // alongside the rest — themes can drive these again.
+        // alongside the rest, themes can drive these again.
         clearAllAppearanceOverrides()
     }
 

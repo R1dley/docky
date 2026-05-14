@@ -475,7 +475,7 @@ struct TileView: View {
 
     /// Only "tappable" tiles (icons that act like apps or files) get
     /// the hover treatment. Widgets, smart stacks, and structural
-    /// fixtures (dividers, spacers) stay flat — a hover halo on a
+    /// fixtures (dividers, spacers) stay flat, a hover halo on a
     /// widget reads as a misfire.
     private var supportsHoverBackground: Bool {
         switch tile.content {
@@ -488,7 +488,7 @@ struct TileView: View {
     }
 
     /// Background drawn under the *foreground* (frontmost) app's tile.
-    /// Independent of hover — both can stack, with hover painted on top.
+    /// Independent of hover, both can stack, with hover painted on top.
     /// Updates live via `WorkspaceService.frontmostBundleIdentifier`.
     @ViewBuilder
     private var activeBackground: some View {
@@ -532,7 +532,7 @@ struct TileView: View {
     }
 
     /// Effective drop shadow applied behind the tile's icon content.
-    /// Returns `Color.clear` when no shadow color is set — combined
+    /// Returns `Color.clear` when no shadow color is set, combined
     /// with a 0 radius below, that makes `.shadow(...)` a true no-op.
     private var iconShadowColor: Color {
         guard let nsColor = preferences.effectiveIconShadowColor else {
@@ -811,7 +811,7 @@ struct TileView: View {
         case .pill:
             Capsule()
         case .underline:
-            // Sharp-cornered rectangle that spans the icon edge —
+            // Sharp-cornered rectangle that spans the icon edge ,
             // Windows 10-style accent line under running apps.
             Rectangle()
         }
@@ -915,7 +915,7 @@ struct TileView: View {
     }
 
     private var nonAppContentPadding: CGFloat {
-        // Per-span widget override wins for widget-hosting tiles —
+        // Per-span widget override wins for widget-hosting tiles ,
         // a theme/user can collapse padding to 0 on 2x/3x widgets for
         // an edge-to-edge taskbar look without touching 1x.
         if let span = widgetRenderedSpan,
@@ -934,7 +934,7 @@ struct TileView: View {
 
     /// Resolved tile icon padding. Widget tiles whose span opts out
     /// (via the theme's `ignoresAddedPaddings` escape hatch) collapse
-    /// to zero so the widget can fill its tile box — needed when a
+    /// to zero so the widget can fill its tile box, needed when a
     /// theme adds icon padding for chunky app tiles but wants 2x/3x
     /// widgets edge-to-edge.
     private var appliedTileIconPadding: CGFloat {
@@ -1200,10 +1200,10 @@ struct TileView: View {
     /// the widget expansion contract: present after a delay on hover-in,
     /// requestDismiss on hover-out (with a short grace so the cursor can
     /// transition into the preview window without dropping it). Both `.app`
-    /// and `.appFolder` tiles participate — the app-folder case aggregates
+    /// and `.appFolder` tiles participate, the app-folder case aggregates
     /// windows from every contained app.
     private func updateWindowPreviewPresentation(isHovering: Bool) {
-        // Freeze preview state while a context menu is open on this tile —
+        // Freeze preview state while a context menu is open on this tile ,
         // the menu's mouse handling can drop us out of hover and prematurely
         // dismiss, or restart the dwell once the user moves off. The
         // preview's own hover monitor still keeps it alive if the cursor is
@@ -1326,7 +1326,7 @@ struct TileView: View {
 
         if isPresented {
             // Cancel any in-flight preview dwell and dismiss whatever is
-            // already on screen — the context menu takes over input and
+            // already on screen, the context menu takes over input and
             // the preview shouldn't sit underneath it.
             windowPreviewDelayTask?.cancel()
             windowPreviewDelayTask = nil
@@ -2104,7 +2104,7 @@ struct TileView: View {
         case .weather:
             WeatherService.shared.openInWeatherApp()
         case .search:
-            // 2x / 3x widgets render an inline text field — clicks there
+            // 2x / 3x widgets render an inline text field, clicks there
             // should focus the field, not open Google. Only the 1x form
             // (no text input fits) acts as a one-click Google launcher.
             if widget.effectiveSpan == .one,
@@ -2165,7 +2165,7 @@ private struct TileTooltipPopoverPresenter: NSViewRepresentable {
     let preferredEdge: NSRectEdge
     /// Changes whenever the anchor view's bounds change (e.g., magnification
     /// reshaping the tile under the cursor). Forces `updateNSView` to fire
-    /// so the popover can resync `positioningRect` to the new bounds —
+    /// so the popover can resync `positioningRect` to the new bounds ,
     /// otherwise it stays pinned to the resting bounds captured at show
     /// time and ends up under the magnified icon.
     let repositionKey: CGFloat
@@ -2602,7 +2602,7 @@ private struct FolderPopoverPresenter: NSViewRepresentable {
 
         /// Mirrors AppFolderPopoverPresenter: when the popover opens during
         /// an active drag, watch DockDragService so the popover closes when
-        /// the drag ends — drop on us, drop elsewhere, or cancel.
+        /// the drag ends, drop on us, drop elsewhere, or cancel.
         private func installDragEndSubscriptionIfNeeded() {
             cancelDragEndSubscription()
             guard DockDragService.shared.kind != nil else { return }

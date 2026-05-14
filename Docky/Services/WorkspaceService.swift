@@ -3,7 +3,7 @@
 //  Docky
 //
 //  Observes NSWorkspace for live workspace state. First pass: running apps
-//  (regular activation policy only — background agents and menu-bar-only
+//  (regular activation policy only, background agents and menu-bar-only
 //  apps are filtered out since they don't belong in a dock). Running apps
 //  are exposed in a stable order: still-running apps keep their position,
 //  newly-launched apps append to the end. Designed to grow: frontmost app,
@@ -44,7 +44,7 @@ final class WorkspaceService: ObservableObject {
     @Published private(set) var appWindowPreviews: [String: NSImage] = [:]
     /// Bundle identifier of the app that currently owns the system
     /// activation (foreground), or `nil` when nothing is frontmost
-    /// (rare — typically transient during space switches).
+    /// (rare, typically transient during space switches).
     @Published private(set) var frontmostBundleIdentifier: String?
 
     private var runningByBundleID: [String: RunningApp] = [:]
@@ -425,7 +425,7 @@ final class WorkspaceService: ObservableObject {
         for (window, frame) in placements {
             allOk = resize(window, toNSFrame: frame) && allOk
         }
-        // Surface every tiled window — windows on inactive Spaces won't be
+        // Surface every tiled window, windows on inactive Spaces won't be
         // visible after resize until SLPS pulls them forward. Focus in order
         // so the first-in-the-layout-name window ends up frontmost / key.
         for (window, _) in placements.reversed() {
@@ -732,7 +732,7 @@ final class WorkspaceService: ObservableObject {
         }
 
         // Evict cached previews whose source window's title changed or whose
-        // age exceeded the TTL — the cached image is no longer representative.
+        // age exceeded the TTL, the cached image is no longer representative.
         let staleIdentifiers: [String] = appWindowPreviewMetadata.compactMap { id, metadata in
             guard let window = windowsByIdentifier[id] else { return nil }
             let titleChanged = metadata.capturedTitle != window.windowTitle

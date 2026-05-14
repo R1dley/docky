@@ -104,7 +104,7 @@ enum ProductFeature: Hashable, Identifiable {
         case .launchpad:
             "Docky's fullscreen app launcher, its layout controls, and optional global shortcut."
         case .windowSwitcher:
-            "Switcher preview modes and window context actions in Docky's global Cmd-Tab-style switcher."
+            "Docky's global Cmd-Tab-style switcher and the per-tile hover preview popover, including preview modes and window context actions."
         case .customAppIcons:
             "Per-app icon overrides for pinned, running, and widget-backed apps."
         case .groupedAppFolders:

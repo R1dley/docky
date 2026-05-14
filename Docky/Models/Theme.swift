@@ -16,14 +16,14 @@
 //  Optional bundle-root files (not referenced by the manifest):
 //    - `cover_image.png` (or `.jpg`/`.jpeg`): displayed by the Themes
 //      settings pane as a rich preview. Convention over manifest
-//      configuration — drop a file in with that name and it's picked
+//      configuration, drop a file in with that name and it's picked
 //      up automatically by `InstalledTheme.coverImageURL`.
 //
 //  Optional files inside `assets/` (also convention-only):
 //    - `<bundle-id>.png` (or `.jpg`/`.jpeg`): per-app icon override.
 //      When the theme is active, `effectiveAppIconOverrideURL` on
 //      `DockyPreferences` falls back to this asset for any app whose
-//      bundle identifier matches the filename — so a file named
+//      bundle identifier matches the filename, so a file named
 //      `com.apple.Safari.png` automatically replaces Safari's icon
 //      while the theme is in use.
 //
@@ -34,7 +34,7 @@ import Foundation
 /// Top-level manifest stored at `<bundle>/theme.json`.
 struct ThemeManifest: Codable, Equatable {
     /// Bumped when the manifest format changes in a non-additive way.
-    /// New optional fields don't require a bump — readers ignore
+    /// New optional fields don't require a bump, readers ignore
     /// unknown keys via `Codable`'s default behavior.
     let schemaVersion: Int
 
@@ -55,7 +55,7 @@ struct ThemeManifest: Codable, Equatable {
     /// stays on the user's value even while the theme is active.
     var behavior: ThemeBehavior?
 
-    /// Layout-level injections — extra structural tiles a theme drops
+    /// Layout-level injections, extra structural tiles a theme drops
     /// into the assembled dock. Lets a theme add a flexible spacer
     /// after the trailing divider so pinned apps pin-left while the
     /// trailing section flushes right (Windows feel), without the
@@ -69,7 +69,7 @@ struct ThemeLayout: Codable, Equatable {
 
 struct ThemeLayoutInsertion: Codable, Equatable {
     /// Tile content to inject. Structural primitives: `"spacer"`,
-    /// `"flexibleSpacer"`, `"divider"`. Widget kinds also accepted —
+    /// `"flexibleSpacer"`, `"divider"`. Widget kinds also accepted ,
     /// any raw value of `WidgetKind` (e.g. `"search"`, `"calendar"`,
     /// `"weather"`). Unknown values are silently skipped.
     var kind: String
@@ -297,7 +297,7 @@ struct ThemeColor: Codable, Equatable {
         return nil
     }
 
-    /// Live NSColor — named colors are looked up on every read so theme
+    /// Live NSColor, named colors are looked up on every read so theme
     /// fields like `"accent"` track the user's current system tint.
     var nsColor: NSColor? {
         if let name, let resolved = Self.resolveNamedColor(name) {

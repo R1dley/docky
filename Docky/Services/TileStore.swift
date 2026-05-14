@@ -44,7 +44,7 @@ final class TileStore: ObservableObject {
     private var dockPinnedTilesByBundleIdentifier: [String: Tile] = [:]
     private var expandedInlineAppFolderIDs: Set<String> = []
     /// Currently displayed unpinned running apps, in visual order. May contain
-    /// one "ghost" entry at the end — an app that recently exited but sat at
+    /// one "ghost" entry at the end, an app that recently exited but sat at
     /// the rightmost position, preserved until something newer takes its slot.
     private var displayedRunning: [RunningApp] = []
 
@@ -76,7 +76,7 @@ final class TileStore: ObservableObject {
         // signal fires only when the relevant property mutates.
         // (`.dropFirst()` skipped the Combine initial emission; the
         // Observation closure runs once on install to register reads
-        // — calling `rebuildTiles` etc. then is safe and idempotent.)
+        //, calling `rebuildTiles` etc. then is safe and idempotent.)
         observeChanges { [weak self] in
             _ = DockyPreferences.shared.pinnedItems
             self?.synchronizeAppWidgetDisplaysWithFolders()
@@ -856,8 +856,8 @@ final class TileStore: ObservableObject {
 
     func smartOrganizePinnedItems() {
         // Smart-organize is FoundationModels-backed (macOS 26+). On
-        // older systems — or when the feature is force-disabled via
-        // `FeatureGate` for testing — the action is a no-op; callers
+        // older systems, or when the feature is force-disabled via
+        // `FeatureGate` for testing, the action is a no-op; callers
         // should hide or disable the entry point via the same gate.
         guard FeatureGate.shared.isAvailable(.foundationModelsSmartOrganize),
               #available(macOS 26.0, *) else { return }
@@ -1798,7 +1798,7 @@ final class TileStore: ObservableObject {
             return
         }
 
-        // The LLM-powered suggester is macOS 26+ — or force-disabled
+        // The LLM-powered suggester is macOS 26+, or force-disabled
         // via `FeatureGate` for testing. On earlier systems the
         // deterministic seed name set at folder-creation time is what
         // the user keeps until they rename manually.
@@ -2090,7 +2090,7 @@ final class TileStore: ObservableObject {
         if !preferences.showsRunningApps {
             runningTiles = []
         } else if preferences.hidesRecentApps {
-            // "Hide recent apps" only suppresses the non-running tail —
+            // "Hide recent apps" only suppresses the non-running tail ,
             // currently running unpinned apps still belong in the dock.
             // The only non-running entry `displayedRunning` ever holds is
             // the trailing "ghost" preserved by `resolveDisplayedRunning`
@@ -2127,7 +2127,7 @@ final class TileStore: ObservableObject {
     /// current list, so themes can target stable structural ids
     /// (`divider:trailing`, `divider:running`) or any pinned/running
     /// app by its bundle identifier. Insertions whose anchor doesn't
-    /// resolve are skipped silently — themes stay portable across
+    /// resolve are skipped silently, themes stay portable across
     /// docks that don't happen to contain the referenced app.
     ///
     /// Called by `TileContainerView.displayTiles` rather than from

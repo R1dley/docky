@@ -29,6 +29,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
     case behaviorSystemDock
     case permissions
     case updates
+    case feedback
 
     var id: String { rawValue }
 
@@ -57,6 +58,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         case .behaviorSystemDock: "System Dock"
         case .permissions: "Permissions"
         case .updates: "Updates"
+        case .feedback: "Feedback"
         }
     }
 
@@ -85,6 +87,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         case .behaviorSystemDock: "dock.rectangle"
         case .permissions: "lock.shield"
         case .updates: "arrow.trianglehead.clockwise"
+        case .feedback: "envelope"
         }
     }
 
@@ -113,6 +116,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         case .behaviorSystemDock: .gray
         case .permissions: .red
         case .updates: .blue
+        case .feedback: .orange
         }
     }
 
@@ -163,11 +167,36 @@ private let settingsSections: [SettingsSection] = [
         .behaviorSystemDock,
         .permissions,
         .updates
+    ]),
+    SettingsSection(id: "support", title: "Support", panes: [
+        .feedback
     ])
 ]
 
+/// Deep-link mailbox for the Settings window. Surfaces in the
+/// sidebar pane selector when the window opens (or on the next
+/// observation tick if the window is already open). Used by the
+/// divider context menu's "Send Feedback" entry today; can carry
+/// any future "jump to pane X" shortcuts the rest of the app needs.
+@MainActor
+@Observable
+final class SettingsNavigator {
+    static let shared = SettingsNavigator()
+    private init() {}
+
+    /// String form of `SettingsPane.rawValue`. Untyped here so callers
+    /// don't need to import the private enum.
+    var pendingPaneID: String?
+
+    func requestPane(id: String) {
+        pendingPaneID = id
+        (NSApp.delegate as? AppDelegate)?.showSettingsWindow(nil)
+    }
+}
+
 struct SettingsRootView: View {
     @State private var selection: SettingsPane = .docky
+    @Bindable private var navigator = SettingsNavigator.shared
 
     var body: some View {
         #if DEBUG
@@ -194,6 +223,15 @@ struct SettingsRootView: View {
             SettingsDetailView(pane: selection)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear { consumePendingPane() }
+        .onChange(of: navigator.pendingPaneID) { _ in consumePendingPane() }
+    }
+
+    private func consumePendingPane() {
+        guard let id = navigator.pendingPaneID,
+              let pane = SettingsPane(rawValue: id) else { return }
+        selection = pane
+        navigator.pendingPaneID = nil
     }
 
     @ViewBuilder
@@ -295,6 +333,8 @@ private struct SettingsDetailView: View {
             PermissionsSettingsView()
         case .updates:
             UpdatesSettingsView()
+        case .feedback:
+            FeedbackSettingsView()
         }
     }
 }

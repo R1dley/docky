@@ -263,7 +263,7 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
         case .weather:
             String(localized: "Shows current weather for your location.")
         case .search:
-            String(localized: "Search the web — click to open Google in your default browser.")
+            String(localized: "Search the web, click to open Google in your default browser.")
         }
     }
 
@@ -984,7 +984,7 @@ private struct DockEditorUtilityPreview: View {
                     .frame(width: scale.tileHeight * 0.78, height: scale.tileHeight * 0.78)
             case .flexibleSpacer:
                 // Arrows pointing outward signal "stretches to fill leftover
-                // space" — distinguishes it from the fixed dashed-box spacer.
+                // space", distinguishes it from the fixed dashed-box spacer.
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.left")
                     Rectangle()

@@ -36,9 +36,14 @@ struct WindowManagementSettingsView: View {
     var body: some View {
         Form {
             Section("Window Switcher") {
+                if !product.isUnlocked(.windowSwitcher) {
+                    ProFeatureNotice(feature: .windowSwitcher)
+                }
+
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Enable Window Switcher", isOn: $preferences.enablesWindowSwitcher)
                         .font(.headline)
+                        .disabled(!product.isUnlocked(.windowSwitcher))
 
                     Text("Turn Docky's Cmd-Tab-style switcher on or off without clearing its shortcut or preview preference.")
                         .foregroundStyle(.secondary)
@@ -66,7 +71,7 @@ struct WindowManagementSettingsView: View {
                         ) { shortcut in
                             preferences.windowSwitcherShortcut = shortcut
                         }
-                        .disabled(!preferences.enablesWindowSwitcher)
+                        .disabled(!product.isUnlocked(.windowSwitcher) || !preferences.enablesWindowSwitcher)
                     }
 
                     Text(shortcutHelpText)
@@ -74,12 +79,6 @@ struct WindowManagementSettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.vertical, 4)
-
-                if !product.isUnlocked(.windowSwitcher) {
-                    Text("Docky Pro unlocks switcher preview modes and window context menus inside the switcher.")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Layout")
@@ -92,7 +91,7 @@ struct WindowManagementSettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    .disabled(!preferences.enablesWindowSwitcher)
+                    .disabled(!product.isUnlocked(.windowSwitcher) || !preferences.enablesWindowSwitcher)
 
                     Text(preferences.windowSwitcherLayout.summary)
                         .foregroundStyle(.secondary)
@@ -141,6 +140,10 @@ struct WindowManagementSettingsView: View {
             }
 
             Section("Window Preview") {
+                if !product.isUnlocked(.windowSwitcher) {
+                    ProFeatureNotice(feature: .windowSwitcher)
+                }
+
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Hover Delay")
@@ -160,6 +163,7 @@ struct WindowManagementSettingsView: View {
                                 .monospacedDigit()
                         }
                     }
+                    .disabled(!product.isUnlocked(.windowSwitcher))
 
                     Text("How long to wait before the per-tile window preview appears when hovering an app or app folder.")
                         .foregroundStyle(.secondary)
@@ -178,6 +182,7 @@ struct WindowManagementSettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
+                    .disabled(!product.isUnlocked(.windowSwitcher))
 
                     Text(preferences.windowPreviewLayout.summary)
                         .foregroundStyle(.secondary)

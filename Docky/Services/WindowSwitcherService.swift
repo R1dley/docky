@@ -88,7 +88,8 @@ final class WindowSwitcherService: ObservableObject {
     }
 
     func handleHotKeyPress(direction: Int) {
-        guard DockyPreferences.shared.enablesWindowSwitcher else {
+        guard ProductService.shared.isUnlocked(.windowSwitcher),
+              DockyPreferences.shared.enablesWindowSwitcher else {
             dismiss()
             return
         }
@@ -259,6 +260,19 @@ final class WindowSwitcherService: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.updateGlobalEventMonitors()
+            }
+            .store(in: &cancellables)
+
+        ProductService.shared.$currentTier
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+
+                self.registerHotKey(shortcut: DockyPreferences.shared.windowSwitcherShortcut)
+                if !ProductService.shared.isUnlocked(.windowSwitcher) {
+                    self.dismiss()
+                    WindowPreviewWindowController.shared.dismissCurrent()
+                }
             }
             .store(in: &cancellables)
     }
@@ -549,7 +563,9 @@ final class WindowSwitcherService: ObservableObject {
     private func registerHotKey(shortcut: KeyboardShortcut) {
         unregisterHotKey()
 
-        guard DockyPreferences.shared.enablesWindowSwitcher, shortcut.isValid else {
+        guard ProductService.shared.isUnlocked(.windowSwitcher),
+              DockyPreferences.shared.enablesWindowSwitcher,
+              shortcut.isValid else {
             return
         }
 

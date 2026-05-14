@@ -161,7 +161,7 @@ enum TileSpan: Int, CaseIterable, Codable, Identifiable {
     case two = 2
     case three = 3
     /// Theme-only span. Not surfaced in the user's widget palette /
-    /// "Span" submenu — themes can inject `"span": 4` via
+    /// "Span" submenu, themes can inject `"span": 4` via
     /// `layout.insertions` for extra-wide affordances (a stretched
     /// search bar, a wide weather rail, etc.).
     case four = 4

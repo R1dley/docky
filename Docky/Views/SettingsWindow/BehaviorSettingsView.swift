@@ -324,7 +324,7 @@ struct BehaviorSettingsView: View {
                 Toggle("Hide Trash", isOn: $preferences.shelveHidesTrash)
                     .disabled(!preferences.enablesShelveMode)
 
-                Text("Treats the dock as a shelf of pinned apps and widgets. Use the toggles to pick which fixtures — Finder, Trash, or both — disappear while shelve mode is on.")
+                Text("Treats the dock as a shelf of pinned apps and widgets. Use the toggles to pick which fixtures, Finder, Trash, or both, disappear while shelve mode is on.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

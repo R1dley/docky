@@ -55,7 +55,11 @@ struct DividerTileView: View {
             .action(String(localized: "Edit Dock...")) {
                 DockEditModeService.shared.enter()
             },
+            .divider,
             .submenu(String(localized: "Troubleshoot"), children: troubleshootActions),
+            .action(String(localized: "Send Feedback...")) {
+                SettingsNavigator.shared.requestPane(id: "feedback")
+            },
             .divider,
             .action(String(localized: "About Docky")) {
                 NSApp.activate(ignoringOtherApps: true)

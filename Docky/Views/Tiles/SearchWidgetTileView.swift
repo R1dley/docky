@@ -5,7 +5,7 @@
 //  1x: static magnifying-glass affordance. Tap (handled in
 //  `TileView.handleWidgetTap`) opens `https://www.google.com`.
 //
-//  2x / 3x: a real, inline `TextField` — type, hit Enter, the typed
+//  2x / 3x: a real, inline `TextField`, type, hit Enter, the typed
 //  query is URL-encoded and `https://www.google.com/search?q=...` opens
 //  in the default browser. To make this work the dock window has to
 //  accept key status while the field is focused; we toggle
@@ -75,7 +75,7 @@ struct SearchWidgetTileView: View {
                     .font(.body)
                     .foregroundStyle(.primary)
                     .opacity(0.9)
-                // ZStack so we can paint a black placeholder explicitly —
+                // ZStack so we can paint a black placeholder explicitly ,
                 // SwiftUI's TextField placeholder inherits secondary
                 // styling from the system, not the surrounding
                 // `.foregroundStyle(.black)`, so without the manual
