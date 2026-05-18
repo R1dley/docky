@@ -34,48 +34,44 @@ struct FolderFanView: View {
     /// past that hides at rest and fades in during the open
     /// animation.
     static let previewSlotCount = 3
-    /// Along-arc spacing per item. Mirrored from the instance
-    /// property below so the static `contentSize` helper can compute
-    /// the same `deltaTheta` the live view does.
-    static let perItemArcLength: CGFloat = 15
+    /// Along-arc spacing per item, expressed as a fraction of the
+    /// un-magnified base icon size. `1.0` means items sit edge-to-
+    /// edge; values > 1 add a visible gap between icons; values < 1
+    /// produce overlap. Multiplied by the magnification factor at
+    /// render time so the spacing grows in lockstep with the
+    /// visible tile when the cursor hovers over a magnified dock.
+    static let perItemArcLengthFactor: CGFloat = 1.0
+
+    /// Resolved per-item arc length. Derives the un-magnified base
+    /// icon size from `iconSize / magnificationFactor`, then applies
+    /// the factor back explicitly. Mathematically same as
+    /// `iconSize × perItemArcLengthFactor` whenever the anchor frame
+    /// reports a magnified size, but the formula keeps the
+    /// magnification growth visible — handy for tuning (e.g. raise
+    /// the factor to amplify hover-time spacing).
+    static func perItemArcLength(iconSize: CGFloat, magnificationFactor: CGFloat) -> CGFloat {
+        let baseIconSize = iconSize / max(magnificationFactor, 0.0001)
+        return baseIconSize * perItemArcLengthFactor * magnificationFactor
+    }
 
     /// Deterministic content size for the hosting NSWindow. Computing
     /// it externally avoids depending on `NSHostingView.fittingSize`,
     /// which can compress the view's explicit `.frame(...)` away
-    /// when invoked before the host has a stable frame — leaving the
-    /// rotated icons clipped on the right.
+    /// when invoked before the host has a stable frame.
     static func contentSize(
         iconSize: CGFloat,
         chromeReach: CGFloat,
         itemCount: Int,
-        screenLongestDimension: CGFloat
+        magnificationFactor: CGFloat
     ) -> NSSize {
-        let theta = computeDeltaTheta(
-            itemCount: itemCount,
-            radius: screenLongestDimension
-        )
-        let maxCurveX = screenLongestDimension * (1 - cos(theta))
-        let maxCurveY = screenLongestDimension * sin(theta)
+        let spacing = perItemArcLength(iconSize: iconSize, magnificationFactor: magnificationFactor)
+        let maxCurveY = spacing * CGFloat(max(0, itemCount - 1))
         let w = labelMaxWidth + labelIconGap + iconSize
         let h = iconSize
-        let overshootX = max(0, (w * cos(theta) + h * sin(theta) - w) / 2) + rotationOvershootSafetyPad
-        let overshootY = max(0, (w * sin(theta) + h * cos(theta) - h) / 2) + rotationOvershootSafetyPad
         return NSSize(
-            width: w + maxCurveX + overshootX,
-            height: h + maxCurveY + bottomPadding + chromeReach + overshootY
+            width: w,
+            height: h + maxCurveY + bottomPadding + chromeReach
         )
-    }
-
-    /// Mirror of `deltaTheta` for the static `contentSize` path —
-    /// kept in lockstep with the instance computation.
-    private static func computeDeltaTheta(itemCount: Int, radius: CGFloat) -> CGFloat {
-        guard itemCount > 1, radius > 0 else { return 0 }
-        let absoluteMaxSpan = CGFloat.pi * 25 / 180
-        let maxScaledMinSpan = CGFloat.pi * 12.5 / 180
-        let progress = CGFloat(itemCount - 1) / CGFloat(Self.maximumItemCount - 1)
-        let scaledMinSpan = maxScaledMinSpan * progress
-        let natural = CGFloat(itemCount - 1) * perItemArcLength / radius
-        return min(absoluteMaxSpan, max(scaledMinSpan, natural))
     }
 
     // MARK: Layout constants (exposed for the presenter)
@@ -98,11 +94,12 @@ struct FolderFanView: View {
     /// uses for the tile's fanned preview, so the fan icons match
     /// the size of the icons the user just clicked on.
     let iconSize: CGFloat
-    /// Longest side of the screen the fan is opening on, in points.
-    /// Used as the circle's radius (diameter = 2× this), so items
-    /// traverse a tiny arc of a very large circle — the gentle
-    /// outward drift characteristic of the macOS Dock fan.
-    let screenLongestDimension: CGFloat
+    /// Tile-size growth factor at the moment the fan opens
+    /// (`magnifiedTileSize / baseTileSize`). 1.0 when the cursor
+    /// isn't over the dock; higher when the tile is currently
+    /// magnified. Drives the per-item spacing so a hovered tile
+    /// gets a more spread-out fan to match its visual scale.
+    let magnificationFactor: CGFloat
     /// How far below the icon-resting baseline the fan view extends
     /// so it overlaps the dock chrome and the tile itself. Items
     /// animate *from* the bottom of this extended area (over the
@@ -116,13 +113,14 @@ struct FolderFanView: View {
     @ObservedObject var model: FanAnimationModel
     let onSelect: (URL) -> Void
 
-    // Along-arc spacing per item. Bumped 25% over the original 12 pt
-    // for a touch more breathing room. The clamp bounds in
-    // `deltaTheta` are bumped in lockstep so the per-item visual
-    // spacing actually reflects the increase instead of being held
-    // back by the floor. Shared with the static `contentSize` path
-    // via `Self.perItemArcLength`.
-    private var perItemArcLength: CGFloat { Self.perItemArcLength }
+    // Resolved per-item along-arc spacing. Scales with the
+    // tile-derived `iconSize` and the explicit magnification factor
+    // so a hovered (magnified) tile produces a proportionally
+    // wider-spaced fan.
+    private var perItemArcLength: CGFloat {
+        Self.perItemArcLength(iconSize: iconSize, magnificationFactor: magnificationFactor)
+    }
+
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -135,20 +133,15 @@ struct FolderFanView: View {
 
     @ViewBuilder
     private func fanItem(url: URL, index: Int, total: Int) -> some View {
-        let t = total <= 1 ? 0 : CGFloat(index) / CGFloat(total - 1)
-        // θ runs from π (item 0 at x=0, y=0) backward by `deltaTheta`
-        // radians (the angular span needed to cover the total arc
-        // length at our radius). Circle center is at (radius, 0) so
-        // cos(π) = -1 yields x=0 for item 0; subsequent items move
-        // right and up as θ decreases.
-        let theta = .pi - deltaTheta * t
-        let curveX = radius * (1 + cos(theta))
-        let curveY = radius * sin(theta)
+        // Straight vertical "unstack": item 0 sits at the bottom of
+        // the line (above the tile), each subsequent item is
+        // `perItemArcLength` higher. No rotation, no horizontal
+        // sweep — just a column that emerges from the pile.
+        let curveY = perItemArcLength * CGFloat(index)
         // Pre-compute the heavy sums so the SwiftUI builder doesn't
         // blow up the type-checker on the modifiers below.
         let hstackWidth = Self.labelMaxWidth + Self.labelIconGap + iconSize
         let positionX = Self.anchorIconOffsetX(iconSize: iconSize)
-            + curveX
             - (Self.labelMaxWidth + Self.labelIconGap) / 2
         let positionY = anchorIconCenterY - curveY
         let initialOffsetY = curveY
@@ -226,18 +219,12 @@ struct FolderFanView: View {
         // an extra `iconSize/2` here would push the icon below the
         // view's frame and the hosting view would clip the bottom
         // half during the first frame of animation.
-        // Tangent-matched clockwise rotation: each item leans into
-        // the curve by the angular distance it has travelled from
-        // item 0 along the ellipse. At rest on the tile (collapsed)
-        // everything is upright; as items slide out to their final
-        // spot, they rotate to match the curve's local tangent.
-        .rotationEffect(.radians(model.isExpanded ? deltaTheta * t : 0))
         // `initialOffsetY` collapses each item back onto the tile,
         // with the 3-item stack offset matching `FolderTileView`'s
         // preview so there's no jump at the start or end of the
-        // animation.
+        // animation. No horizontal travel — straight vertical line.
         .offset(
-            x: model.isExpanded ? 0 : -curveX,
+            x: 0,
             y: model.isExpanded ? 0 : initialOffsetY
         )
         // Snappy: 0.25s spring, 20 ms stagger. Last of 10 items
@@ -258,39 +245,18 @@ struct FolderFanView: View {
         .zIndex(-Double(index))
     }
 
-    // MARK: Curve
+    // MARK: Geometry
 
-    private var radius: CGFloat { screenLongestDimension }
-
-    private var deltaTheta: CGFloat {
-        // Clamp the angular span to [scaledMin, 20°]. The upper
-        // bound keeps the fan from opening into a wide wedge (macOS
-        // Dock fan is a near-vertical column with gentle outward
-        // drift, not a sector). The lower bound scales linearly
-        // with item count so 10 items hit a 10° floor while a
-        // 2-item fan only needs ~1° of curve — preventing the min
-        // clamp from spreading sparse fans halfway across the
-        // screen.
-        guard items.count > 1, radius > 0 else { return 0 }
-        let absoluteMaxSpan = CGFloat.pi * 25 / 180
-        let maxScaledMinSpan = CGFloat.pi * 12.5 / 180
-        let progress = CGFloat(items.count - 1) / CGFloat(Self.maximumItemCount - 1)
-        let scaledMinSpan = maxScaledMinSpan * progress
-        let natural = CGFloat(items.count - 1) * perItemArcLength / radius
-        return min(absoluteMaxSpan, max(scaledMinSpan, natural))
+    /// Total vertical reach of the expanded fan: items are evenly
+    /// spaced by `perItemArcLength` along a single straight line.
+    private var maxCurveY: CGFloat {
+        perItemArcLength * CGFloat(max(0, items.count - 1))
     }
-
-    private var maxCurveX: CGFloat { radius * (1 - cos(deltaTheta)) }
-    private var maxCurveY: CGFloat { radius * sin(deltaTheta) }
 
     // MARK: Frame
 
     private var viewWidth: CGFloat {
-        // `rotationOvershootX` reserves room on the right for the
-        // top-of-curve item's `.rotationEffect`. Without it the
-        // rotated bounding box extends past the view's frame and
-        // the hosting NSWindow clips the icon.
-        Self.labelMaxWidth + Self.labelIconGap + iconSize + maxCurveX + rotationOvershootX
+        Self.labelMaxWidth + Self.labelIconGap + iconSize
     }
 
     private var viewHeight: CGFloat {
@@ -298,53 +264,12 @@ struct FolderFanView: View {
         // that the view occupies so animations can start over the
         // tile. The icon baseline stays at the same screen position
         // because the presenter shifts the window down by exactly
-        // `chromeReach`. `rotationOvershootY` adds matching headroom
-        // *above* the topmost icon so rotation doesn't clip the top
-        // of the bounding box either.
-        iconSize + maxCurveY + Self.bottomPadding + chromeReach + rotationOvershootY
+        // `chromeReach`.
+        iconSize + maxCurveY + Self.bottomPadding + chromeReach
     }
 
     private var anchorIconCenterY: CGFloat {
-        // The rotation overshoot grows `viewHeight` at the *top*
-        // (smaller y in SwiftUI top-down). The icon's resting
-        // position is measured up from the view's bottom, so it
-        // stays anchored to the same screen Y regardless of how
-        // much overshoot we add — meaning the collapsed pile lands
-        // exactly at the tile center the presenter aimed for, and
-        // the extra space sits above the topmost icon as headroom
-        // for rotated rendering.
         viewHeight - Self.bottomPadding - chromeReach - iconSize / 2
-    }
-
-    /// Additional safety margin past the precise rotation-overshoot
-    /// math, in points. Covers shadows on the icon, the capsule
-    /// stroke on the label chip, and any sub-pixel rounding in the
-    /// rotation transform.
-    private static let rotationOvershootSafetyPad: CGFloat = 12
-
-    /// Half of the bounding-box width growth for a rectangle of
-    /// size (hstackWidth × iconSize) rotated by the maximum angle
-    /// any item reaches (`deltaTheta`, only the top-most item).
-    /// Total bbox growth on the rotated axis is `w*cos+h*sin - w`;
-    /// the rotated content extends by half that on each side, plus
-    /// a safety pad for shadows / strokes.
-    private var rotationOvershootX: CGFloat {
-        let w = Self.labelMaxWidth + Self.labelIconGap + iconSize
-        let h = iconSize
-        let theta = deltaTheta
-        let math = max(0, (w * cos(theta) + h * sin(theta) - w) / 2)
-        return math + Self.rotationOvershootSafetyPad
-    }
-
-    /// Vertical mirror of `rotationOvershootX`. Wide rectangles get
-    /// much larger vertical overshoot than horizontal because the
-    /// long edge sweeps top/bottom.
-    private var rotationOvershootY: CGFloat {
-        let w = Self.labelMaxWidth + Self.labelIconGap + iconSize
-        let h = iconSize
-        let theta = deltaTheta
-        let math = max(0, (w * sin(theta) + h * cos(theta) - h) / 2)
-        return math + Self.rotationOvershootSafetyPad
     }
 
     private func displayName(for url: URL) -> String {
@@ -363,17 +288,18 @@ struct FolderFanView: View {
     /// Mapping by index from the front of the list: index 0 → +4,
     /// index 1 → 0, index 2+ → −4 (clamped, since the tile preview
     /// only spans 3 slots anyway).
-    /// Per-item icon opacity. In the expanded state every visible
-    /// item is fully opaque. In the collapsed state the first three
-    /// slots mirror `FolderTileView.stack(in:)`'s depth-based ramp
-    /// (1.0 / 0.88 / 0.76) so the at-rest pile is indistinguishable
-    /// from the tile preview underneath; items beyond the preview
-    /// window are invisible.
+    /// Per-item icon opacity. Items past the preview window stay at
+    /// 1.0 in both states — they're hidden in the collapsed pile
+    /// purely by z-order (lower `zIndex` than item 2, same stack
+    /// offset, so they're fully occluded behind it), and the
+    /// position slide alone reveals them during the open animation.
+    /// The first three slots still mirror
+    /// `FolderTileView.stack(in:)`'s depth ramp (1.0 / 0.88 / 0.76)
+    /// at rest and animate up to 1.0 when expanded.
     private func iconOpacity(forIndex index: Int) -> Double {
-        if model.isExpanded {
+        if model.isExpanded || index >= Self.previewSlotCount {
             return 1.0
         }
-        guard index < Self.previewSlotCount else { return 0 }
         let depthOpacityStep: Double = 0.12 // matches FolderTileView.stack
         return 1.0 - Double(index) * depthOpacityStep
     }
@@ -482,17 +408,23 @@ struct FolderFanPresenter: NSViewRepresentable {
             let anchorBoundsInWindow = anchor.convert(anchor.bounds, to: nil)
             let anchorFrameInScreen = anchorWindow.convertToScreen(anchorBoundsInWindow)
 
-            // Use the screen the anchor window sits on so a multi-
-            // display setup picks up each screen's own longest side.
-            let screenFrame = anchorWindow.screen?.frame ?? NSScreen.main?.frame ?? .zero
-            let longest = max(screenFrame.width, screenFrame.height)
-
             // Match the icon side that `FolderTileView.stack(in:)`
             // renders inside the tile (0.82 × the tile's shorter
             // side), so fan icons are the same visual size as the
             // tile preview icons the user just clicked.
             let tileSide = min(anchorFrameInScreen.width, anchorFrameInScreen.height)
             let iconSize = tileSide * 0.82
+
+            // Magnification factor: how much the visible tile has
+            // grown relative to the dock's base tile size. 1.0 when
+            // the cursor isn't hovering; can climb to ~2× when the
+            // cursor sits directly on the tile. Used by
+            // `FolderFanView` to scale per-item spacing so a
+            // magnified tile produces a proportionally wider fan.
+            let baseTileSize = DockSettingsService.shared.displayTileSize
+            let magnificationFactor: CGFloat = baseTileSize > 0
+                ? tileSide / baseTileSize
+                : 1.0
 
             // Pick `chromeReach` so the initial icon center lands on
             // the tile's *center*, not above the tile. Derivation:
@@ -515,7 +447,7 @@ struct FolderFanPresenter: NSViewRepresentable {
                 folderURL: folderURL,
                 items: items,
                 iconSize: iconSize,
-                screenLongestDimension: longest,
+                magnificationFactor: magnificationFactor,
                 chromeReach: chromeReach,
                 model: model,
                 onSelect: { [weak self] url in
@@ -533,7 +465,7 @@ struct FolderFanPresenter: NSViewRepresentable {
                 iconSize: iconSize,
                 chromeReach: chromeReach,
                 itemCount: items.count,
-                screenLongestDimension: longest
+                magnificationFactor: magnificationFactor
             )
             let hostingView = NSHostingView(rootView: rootView)
             hostingView.frame = NSRect(origin: .zero, size: size)

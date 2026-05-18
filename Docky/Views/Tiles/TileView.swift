@@ -1655,17 +1655,16 @@ struct TileView: View {
         }
 
         // Touch the singleton so its Spotlight query is running by the
-        // time the user opens the submenu. First-ever right-click may
-        // still produce an empty list until the initial gather finishes.
+        // time the user opens the menu. First-ever right-click may still
+        // produce an empty list until the initial gather finishes.
         _ = RecentFilesService.shared
-        let recentsSubmenu = ContextAction.lazySubmenu(
-            String(localized: "Recent Files"),
-            image: contextMenuSymbol("clock")
-        ) {
-            recentFilesContextActions()
-        }
+        let recentEntries = recentFilesContextActions()
 
-        var result: [ContextAction] = [homeSubmenu, recentsSubmenu]
+        var result: [ContextAction] = [homeSubmenu]
+        if !recentEntries.isEmpty {
+            result.append(.divider)
+            result.append(contentsOf: recentEntries)
+        }
         if let first = actions.first, first.kind != .divider {
             result.append(.divider)
         }
@@ -2873,9 +2872,7 @@ func recentFilesContextActions() -> [ContextAction] {
     let urls = RecentFilesService.shared.recentURLs
     Logger(subsystem: "gt.quintero.Docky", category: "RecentFiles")
         .info("menu requested urls.count=\(urls.count, privacy: .public)")
-    guard !urls.isEmpty else {
-        return [.action(String(localized: "No Recent Files"), handler: {})]
-    }
+    guard !urls.isEmpty else { return [] }
 
     let visibleLimit = 10
     let visible = urls.prefix(visibleLimit)
@@ -2884,7 +2881,6 @@ func recentFilesContextActions() -> [ContextAction] {
     var actions: [ContextAction] = visible.map(recentFileContextAction)
 
     if !overflow.isEmpty {
-        actions.append(.divider)
         actions.append(.lazySubmenu(String(localized: "More"), image: contextMenuSymbol("ellipsis")) {
             overflow.map(recentFileContextAction)
         })
