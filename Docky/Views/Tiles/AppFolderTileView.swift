@@ -313,32 +313,39 @@ struct AppFolderTileView: View {
 
 struct AppFolderPopoverView: View {
     let tile: AppFolderTile
+    let tileID: String
     @Binding var isPresented: Bool
     let onPopoverSizeChange: (CGSize) -> Void
     @Bindable private var preferences = DockyPreferences.shared
     @State private var hoveredBundleIdentifier: String?
+    @State private var isEditingTitle = false
+    @State private var editingTitle = ""
+    @State private var isTitleHovered = false
+    @FocusState private var isTitleFieldFocused: Bool
 
-    private let columns = 3
-    private let itemWidth: CGFloat = 96
-    private let itemHeight: CGFloat = 96
-    private let itemSpacing: CGFloat = 12
-    private let contentPadding: CGFloat = 20
-    private let headerHeight: CGFloat = 42
-    private let maxHeight: CGFloat = 620
+    fileprivate static let columns = 3
+    fileprivate static let itemWidth: CGFloat = 96
+    fileprivate static let itemHeight: CGFloat = 96
+    fileprivate static let itemSpacing: CGFloat = 12
+    fileprivate static let contentPadding: CGFloat = 20
+    fileprivate static let headerHeight: CGFloat = 42
+    fileprivate static let maxHeight: CGFloat = 620
     // At rest the ring is inset 8pt from the cell edge so it sits inside
     // the visible icon squircle. On hover the inset goes negative, pushing
     // the ring `hoverOverflow` past the cell on each side for a clear pop.
     // The radius matches Docky's widget tile shape (`tileSize * 0.225`).
     private let iconChromeInset: CGFloat = 8
     private let hoverOverflow: CGFloat = 4
-    private var iconBorderRadius: CGFloat { itemWidth * 0.225 }
+    private var iconBorderRadius: CGFloat { Self.itemWidth * 0.225 }
 
     init(
         tile: AppFolderTile,
+        tileID: String,
         isPresented: Binding<Bool>,
         onPopoverSizeChange: @escaping (CGSize) -> Void = { _ in }
     ) {
         self.tile = tile
+        self.tileID = tileID
         _isPresented = isPresented
         self.onPopoverSizeChange = onPopoverSizeChange
     }
@@ -350,18 +357,16 @@ struct AppFolderPopoverView: View {
 
         VStack(spacing: 0) {
             HStack {
-                Text(tile.displayName)
-                    .font(.headline)
-                    .lineLimit(1)
+                titleView
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, contentPadding)
+            .padding(.horizontal, Self.contentPadding)
             .padding(.top, 16)
-            .frame(height: headerHeight)
+            .frame(height: Self.headerHeight)
 
             ScrollView(showsIndicators: false) {
-                LazyVGrid(columns: gridColumns, spacing: itemSpacing) {
+                LazyVGrid(columns: gridColumns, spacing: Self.itemSpacing) {
                     ForEach(tile.apps, id: \.bundleIdentifier) { app in
                         let isHovered = hoveredBundleIdentifier == app.bundleIdentifier
                         Button {
@@ -372,8 +377,8 @@ struct AppFolderPopoverView: View {
                                 .resizable()
                                 .interpolation(.high)
                                 .aspectRatio(contentMode: .fit)
-                                .frame(width: itemWidth, height: itemHeight)
-                                .padding(overrideIconPadding(for: app.bundleIdentifier, side: itemWidth))
+                                .frame(width: Self.itemWidth, height: Self.itemHeight)
+                                .padding(overrideIconPadding(for: app.bundleIdentifier, side: Self.itemWidth))
                                 .background {
                                     // Border lives in an overlay whose inset
                                     // tracks hover state — at rest the ring
@@ -394,6 +399,9 @@ struct AppFolderPopoverView: View {
                                 hoveredBundleIdentifier = nil
                             }
                         }
+                        .onDrag {
+                            beginDragOutOfFolder(for: app)
+                        }
                         .onDrop(
                             of: [UTType.fileURL.identifier],
                             isTargeted: dropTargetBinding(for: app),
@@ -409,7 +417,7 @@ struct AppFolderPopoverView: View {
                         }
                     }
                 }
-                .padding(contentPadding)
+                .padding(Self.contentPadding)
             }
         }
         .frame(width: popoverSize.width, height: popoverSize.height)
@@ -421,17 +429,77 @@ struct AppFolderPopoverView: View {
         }
     }
 
-    private var gridColumns: [GridItem] {
-        Array(repeating: GridItem(.fixed(itemWidth), spacing: itemSpacing, alignment: .top), count: columns)
+    @ViewBuilder
+    private var titleView: some View {
+        if isEditingTitle {
+            TextField("Folder", text: $editingTitle)
+                .textFieldStyle(.plain)
+                .font(.headline)
+                .lineLimit(1)
+                .focused($isTitleFieldFocused)
+                .onSubmit { commitTitleEdit() }
+                .onExitCommand { cancelTitleEdit() }
+                .onChange(of: isTitleFieldFocused) { focused in
+                    if !focused, isEditingTitle {
+                        commitTitleEdit()
+                    }
+                }
+        } else {
+            Text(tile.displayName)
+                .font(.headline)
+                .lineLimit(1)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(Color.primary.opacity(isTitleHovered ? 0.08 : 0))
+                )
+                .padding(.horizontal, -4)
+                .padding(.vertical, -2)
+                .contentShape(Rectangle())
+                .onHover { isTitleHovered = $0 }
+                .onTapGesture { startTitleEdit() }
+                .help("Click to rename")
+        }
     }
 
-    private var rowCount: Int {
-        max(Int(ceil(Double(tile.apps.count) / Double(columns))), 1)
+    private func startTitleEdit() {
+        editingTitle = tile.displayName
+        isEditingTitle = true
+        DispatchQueue.main.async {
+            isTitleFieldFocused = true
+        }
+    }
+
+    private func commitTitleEdit() {
+        let trimmed = editingTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty, trimmed != tile.displayName {
+            TileStore.shared.renameAppFolder(tileID: tileID, displayName: trimmed)
+        }
+        isEditingTitle = false
+        isTitleFieldFocused = false
+    }
+
+    private func cancelTitleEdit() {
+        isEditingTitle = false
+        isTitleFieldFocused = false
+    }
+
+    private var gridColumns: [GridItem] {
+        Array(
+            repeating: GridItem(.fixed(Self.itemWidth), spacing: Self.itemSpacing, alignment: .top),
+            count: Self.columns
+        )
     }
 
     private var popoverSize: CGSize {
+        Self.popoverSize(forAppCount: tile.apps.count)
+    }
+
+    static func popoverSize(forAppCount appCount: Int) -> CGSize {
+        let rows = max(Int(ceil(Double(appCount) / Double(columns))), 1)
         let width = CGFloat(columns) * itemWidth + CGFloat(columns - 1) * itemSpacing + contentPadding * 2
-        let gridHeight = CGFloat(rowCount) * itemHeight + CGFloat(max(rowCount - 1, 0)) * itemSpacing
+        let gridHeight = CGFloat(rows) * itemHeight + CGFloat(max(rows - 1, 0)) * itemSpacing
         let height = min(gridHeight + contentPadding * 2 + headerHeight + 16, maxHeight)
         return CGSize(width: width, height: height)
     }
@@ -464,7 +532,31 @@ struct AppFolderPopoverView: View {
         let baseActions = MenuCatalogService.shared
             .contextActions(for: syntheticTile, modifierFlags: modifierFlags) ?? []
         let windows = WorkspaceService.shared.appWindows(bundleIdentifier: app.bundleIdentifier)
-        return injectingAppWindowActions(windows, into: baseActions)
+        let withWindows = injectingAppWindowActions(windows, into: baseActions)
+        return appendingRemoveFromFolder(to: withWindows, for: app)
+    }
+
+    private func appendingRemoveFromFolder(
+        to actions: [ContextAction],
+        for app: AppTile
+    ) -> [ContextAction] {
+        let folderID = tileID
+        let bundleIdentifier = app.bundleIdentifier
+
+        var result = actions
+        if !result.isEmpty, result.last?.kind != .divider {
+            result.append(.divider)
+        }
+        result.append(.action(
+            String(localized: "Remove from Folder"),
+            image: NSImage(systemSymbolName: "folder.badge.minus", accessibilityDescription: nil)
+        ) {
+            TileStore.shared.removeAppFromFolder(
+                tileID: folderID,
+                bundleIdentifier: bundleIdentifier
+            )
+        })
+        return result
     }
 
     /// Reuses the hover state for drop-target highlighting so the ring pops
@@ -483,6 +575,15 @@ struct AppFolderPopoverView: View {
     }
 
     private func openDroppedFiles(providers: [NSItemProvider], with app: AppTile) {
+        // The "open file with app" drop fires for any file URL dropped on a
+        // sibling icon — including ours. When the active drag started by
+        // dragging an icon OUT of this folder, ignore the drop so the user
+        // doesn't accidentally open the dragged app with the sibling.
+        guard DockDragService.shared.sourceFolderTileID == nil else {
+            DockDragService.shared.clear()
+            return
+        }
+
         let typeID = UTType.fileURL.identifier
         let group = DispatchGroup()
         var collected: [URL] = []
@@ -511,15 +612,50 @@ struct AppFolderPopoverView: View {
             DockDragService.shared.clear()
         }
     }
+
+    /// Begins a system drag that carries the app's bundle URL on the
+    /// pasteboard. The dock window's drag destination resolves that URL to
+    /// the existing `.app` preview kind via `DockDragService.resolvePreview`,
+    /// and the source-folder fields tell the drop handler to remove the app
+    /// from this folder before pinning it at the destination.
+    ///
+    /// Closes the popover immediately so the user can see the dock and
+    /// pick a drop position. The AppKit drag session survives the popover
+    /// dismissal because the drag image is owned at the screen level.
+    private func beginDragOutOfFolder(for app: AppTile) -> NSItemProvider {
+        let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleIdentifier)
+        DockDragService.shared.sourceFolderTileID = tileID
+        DockDragService.shared.sourceFolderBundleIdentifier = app.bundleIdentifier
+        // Set kind synchronously so the dock's autohide gate ([[shouldRemainVisible]])
+        // engages before the popover closes. Otherwise the dock starts to
+        // fade while the cursor is still over where the popover was.
+        // draggingEntered will overwrite kind with the same value once the
+        // cursor reaches the dock window.
+        if let url {
+            DockDragService.shared.kind = .app(url, app)
+        }
+        // Arm a polling cleanup. Drags that never cross the dock view (e.g.
+        // user drops on Finder) won't trigger the dock's draggingEnded, so
+        // this is what eventually clears the kind+source-folder state and
+        // lets the dock auto-hide again.
+        DockDragService.shared.armMouseReleaseCleanup()
+        isPresented = false
+
+        if let url {
+            return NSItemProvider(object: url as NSURL)
+        }
+        return NSItemProvider()
+    }
 }
 
 struct AppFolderListMenuPresenter: NSViewRepresentable {
     let tile: AppFolderTile
+    let tileID: String
     @Binding var isPresented: Bool
     let preferredEdge: NSRectEdge
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(tile: tile, isPresented: $isPresented, preferredEdge: preferredEdge)
+        Coordinator(tile: tile, tileID: tileID, isPresented: $isPresented, preferredEdge: preferredEdge)
     }
 
     func makeNSView(context: Context) -> AppFolderPopoverAnchorView {
@@ -527,7 +663,7 @@ struct AppFolderListMenuPresenter: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: AppFolderPopoverAnchorView, context: Context) {
-        context.coordinator.update(tile: tile, isPresented: $isPresented, preferredEdge: preferredEdge)
+        context.coordinator.update(tile: tile, tileID: tileID, isPresented: $isPresented, preferredEdge: preferredEdge)
 
         if isPresented {
             DispatchQueue.main.async {
@@ -544,21 +680,24 @@ struct AppFolderListMenuPresenter: NSViewRepresentable {
 
     final class Coordinator: NSObject {
         private var tile: AppFolderTile
+        private var tileID: String
         private var isPresented: Binding<Bool>
         private var preferredEdge: NSRectEdge
         private weak var anchorView: NSView?
         private var isShowing = false
         private var isInterruptingAutohide = false
 
-        init(tile: AppFolderTile, isPresented: Binding<Bool>, preferredEdge: NSRectEdge) {
+        init(tile: AppFolderTile, tileID: String, isPresented: Binding<Bool>, preferredEdge: NSRectEdge) {
             self.tile = tile
+            self.tileID = tileID
             self.isPresented = isPresented
             self.preferredEdge = preferredEdge
             super.init()
         }
 
-        func update(tile: AppFolderTile, isPresented: Binding<Bool>, preferredEdge: NSRectEdge) {
+        func update(tile: AppFolderTile, tileID: String, isPresented: Binding<Bool>, preferredEdge: NSRectEdge) {
             self.tile = tile
+            self.tileID = tileID
             self.isPresented = isPresented
             self.preferredEdge = preferredEdge
         }
@@ -603,6 +742,31 @@ struct AppFolderListMenuPresenter: NSViewRepresentable {
             openAll.target = self
             openAll.isEnabled = !tile.apps.isEmpty
             menu.addItem(openAll)
+
+            if !tile.apps.isEmpty {
+                menu.addItem(.separator())
+                let removeRoot = NSMenuItem(
+                    title: String(localized: "Remove from Folder"),
+                    action: nil,
+                    keyEquivalent: ""
+                )
+                removeRoot.image = NSImage(systemSymbolName: "folder.badge.minus", accessibilityDescription: nil)
+                let removeSubmenu = NSMenu(title: String(localized: "Remove from Folder"))
+                for app in tile.apps {
+                    let item = NSMenuItem(
+                        title: app.displayName,
+                        action: #selector(removeApp(_:)),
+                        keyEquivalent: ""
+                    )
+                    item.target = self
+                    item.representedObject = app.bundleIdentifier
+                    item.image = listMenuIcon(for: app.bundleIdentifier)
+                    removeSubmenu.addItem(item)
+                }
+                removeRoot.submenu = removeSubmenu
+                menu.addItem(removeRoot)
+            }
+
             return menu
         }
 
@@ -629,6 +793,14 @@ struct AppFolderListMenuPresenter: NSViewRepresentable {
             for app in tile.apps {
                 WorkspaceService.shared.activateOrOpen(bundleIdentifier: app.bundleIdentifier)
             }
+        }
+
+        @objc private func removeApp(_ sender: NSMenuItem) {
+            guard let bundleIdentifier = sender.representedObject as? String else { return }
+            TileStore.shared.removeAppFromFolder(
+                tileID: tileID,
+                bundleIdentifier: bundleIdentifier
+            )
         }
 
         private func popUp(menu: NSMenu, in view: NSView) {
@@ -661,11 +833,12 @@ struct AppFolderListMenuPresenter: NSViewRepresentable {
 
 struct AppFolderPopoverPresenter: NSViewRepresentable {
     let tile: AppFolderTile
+    let tileID: String
     @Binding var isPresented: Bool
     let preferredEdge: NSRectEdge
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(tile: tile, isPresented: $isPresented, preferredEdge: preferredEdge)
+        Coordinator(tile: tile, tileID: tileID, isPresented: $isPresented, preferredEdge: preferredEdge)
     }
 
     func makeNSView(context: Context) -> AppFolderPopoverAnchorView {
@@ -673,7 +846,7 @@ struct AppFolderPopoverPresenter: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: AppFolderPopoverAnchorView, context: Context) {
-        context.coordinator.update(tile: tile, isPresented: $isPresented, preferredEdge: preferredEdge)
+        context.coordinator.update(tile: tile, tileID: tileID, isPresented: $isPresented, preferredEdge: preferredEdge)
 
         if isPresented {
             context.coordinator.show(relativeTo: nsView)
@@ -691,19 +864,23 @@ struct AppFolderPopoverPresenter: NSViewRepresentable {
         private let hostingController = NSHostingController(
             rootView: AppFolderPopoverView(
                 tile: AppFolderTile(identifier: "", displayName: "", apps: []),
+                tileID: "",
                 isPresented: .constant(false)
             )
         )
+        private var tile: AppFolderTile
+        private var tileID: String
         private var isPresented: Binding<Bool>
         private var preferredEdge: NSRectEdge
-        private var lastContentSize = NSSize(width: 384, height: 240)
         private weak var anchorView: NSView?
         private var isInterruptingAutohide = false
         private var globalClickMonitor: Any?
         private var localClickMonitor: Any?
         private var dragEndSubscription: AnyCancellable?
 
-        init(tile: AppFolderTile, isPresented: Binding<Bool>, preferredEdge: NSRectEdge) {
+        init(tile: AppFolderTile, tileID: String, isPresented: Binding<Bool>, preferredEdge: NSRectEdge) {
+            self.tile = tile
+            self.tileID = tileID
             self.isPresented = isPresented
             self.preferredEdge = preferredEdge
             super.init()
@@ -711,14 +888,17 @@ struct AppFolderPopoverPresenter: NSViewRepresentable {
             popover.animates = true
             popover.behavior = .transient
             popover.delegate = self
-            update(tile: tile, isPresented: isPresented, preferredEdge: preferredEdge)
+            update(tile: tile, tileID: tileID, isPresented: isPresented, preferredEdge: preferredEdge)
         }
 
-        func update(tile: AppFolderTile, isPresented: Binding<Bool>, preferredEdge: NSRectEdge) {
+        func update(tile: AppFolderTile, tileID: String, isPresented: Binding<Bool>, preferredEdge: NSRectEdge) {
+            self.tile = tile
+            self.tileID = tileID
             self.isPresented = isPresented
             self.preferredEdge = preferredEdge
             hostingController.rootView = AppFolderPopoverView(
                 tile: tile,
+                tileID: tileID,
                 isPresented: isPresented,
                 onPopoverSizeChange: { [weak self] size in
                     self?.updateContentSize(size)
@@ -730,7 +910,12 @@ struct AppFolderPopoverPresenter: NSViewRepresentable {
             guard view.window != nil, !popover.isShown else { return }
             anchorView = view
             beginAutohideInterruption(for: view)
-            updateContentSize(lastContentSize)
+            // Size the popover for the current tile BEFORE showing.
+            // Why: relying on SwiftUI's .onAppear to resize after show left the
+            // host view smaller than the SwiftUI content when the tile grew
+            // between opens (e.g. 3 → 4 apps), clipping the new row out of the
+            // hit-test region.
+            updateContentSize(AppFolderPopoverView.popoverSize(forAppCount: tile.apps.count))
             popover.show(relativeTo: anchorRect(in: view.bounds), of: view, preferredEdge: preferredEdge)
             installClickAwayMonitors()
             installDragEndSubscriptionIfNeeded()
@@ -843,7 +1028,6 @@ struct AppFolderPopoverPresenter: NSViewRepresentable {
         private func updateContentSize(_ size: CGSize) {
             let contentSize = NSSize(width: size.width, height: size.height)
             guard contentSize.width > 0, contentSize.height > 0 else { return }
-            lastContentSize = contentSize
             hostingController.preferredContentSize = contentSize
             popover.contentSize = contentSize
         }

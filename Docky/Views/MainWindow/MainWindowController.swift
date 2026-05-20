@@ -13,6 +13,7 @@ final class MainWindowController: NSWindowController {
     private var launchpadOverlayWindowController: LaunchpadOverlayWindowController?
     private var smartOrganizeProgressChipWindowController: SmartOrganizeProgressChipWindowController?
     private var windowSwitcherOverlayWindowController: WindowSwitcherOverlayWindowController?
+    private var startMenuOverlayWindowController: StartMenuOverlayWindowController?
 
     override init(window: NSWindow?) {
         super.init(window: window)
@@ -26,6 +27,8 @@ final class MainWindowController: NSWindowController {
         launchpadOverlayWindowController = LaunchpadOverlayWindowController(mainWindow: mainWindow)
         smartOrganizeProgressChipWindowController = SmartOrganizeProgressChipWindowController(mainWindow: mainWindow)
         windowSwitcherOverlayWindowController = WindowSwitcherOverlayWindowController(mainWindow: mainWindow)
+        startMenuOverlayWindowController = StartMenuOverlayWindowController(mainWindow: mainWindow)
+        _ = StartMenuService.shared
     }
 
     @available(*, unavailable)

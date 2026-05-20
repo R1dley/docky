@@ -60,8 +60,14 @@ final class WindowPreviewService: ObservableObject {
 
         var seen = Set<String>()
         var aggregated: [AppWindow] = []
+        let registry = WindowRegistry.shared
         for bundleID in bundleIDs where !bundleID.isEmpty {
             for window in WorkspaceService.shared.appWindows(bundleIdentifier: bundleID) {
+                // Hover popover keeps minimized windows (user expects
+                // them listed so they can restore), but still drops
+                // anything the switcher / preview pipeline can't
+                // represent — no CGWindowID, no CG bounds, < 100x100.
+                guard registry.isCapturable(window) else { continue }
                 guard seen.insert(window.windowIdentifier).inserted else { continue }
                 aggregated.append(window)
             }

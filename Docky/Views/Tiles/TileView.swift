@@ -86,7 +86,7 @@ struct TileView: View {
                 return appContextActions(for: app, modifierFlags: modifierFlags, baseActions: catalogActions)
             case .trash:
                 return catalogActions
-            case .launchpad:
+            case .launchpad, .startMenu:
                 var actions = catalogActions
                 if !customDockyTileActions.isEmpty {
                     actions.append(.divider)
@@ -120,6 +120,23 @@ struct TileView: View {
             if preferences.enablesLaunchpadOverlay {
                 actions.append(.action(String(localized: "Open Launchpad")) {
                     LaunchpadOverlayService.shared.present()
+                })
+            }
+
+            if !customDockyTileActions.isEmpty {
+                if !actions.isEmpty {
+                    actions.append(.divider)
+                }
+                actions.append(contentsOf: customDockyTileActions)
+            }
+
+            return actions
+        case .startMenu:
+            var actions: [ContextAction] = []
+
+            if preferences.enablesStartMenuOverlay {
+                actions.append(.action(String(localized: "Open Start Menu")) {
+                    StartMenuService.shared.present()
                 })
             }
 
@@ -314,11 +331,14 @@ struct TileView: View {
             })
         }
 
-        if case .launchpad = tile.content {
+        switch tile.content {
+        case .launchpad, .startMenu:
             actions.append(.divider)
             actions.append(.action(String(localized: "Remove from Dock")) {
                 removeDockyTile()
             })
+        default:
+            break
         }
 
         return actions
@@ -357,7 +377,7 @@ struct TileView: View {
         case .smartStack:
             let feature = ProductFeature.smartStack
             return product.availability(for: feature, context: .existingPlacement) == .lockedExisting ? feature : nil
-        case .app, .minimizedWindow, .appFolder, .folder, .spacer, .flexibleSpacer, .divider, .trash:
+        case .app, .minimizedWindow, .appFolder, .folder, .spacer, .flexibleSpacer, .divider, .trash, .startMenu:
             return nil
         }
     }
@@ -379,7 +399,7 @@ struct TileView: View {
         switch tile.content {
         case .app, .appFolder, .folder, .trash:
             return true
-        case .minimizedWindow, .spacer, .flexibleSpacer, .divider, .launchpad, .widget, .smartStack:
+        case .minimizedWindow, .spacer, .flexibleSpacer, .divider, .launchpad, .startMenu, .widget, .smartStack:
             return false
         }
     }
@@ -420,7 +440,7 @@ struct TileView: View {
             actions.append(.action(String(localized: "Show App Icon")) {
                 TileStore.shared.removeAppWidgetDisplay(bundleIdentifier: app.bundleIdentifier)
             })
-        case .launchpad, .widget, .smartStack:
+        case .launchpad, .startMenu, .widget, .smartStack:
             if isDockyPinnedTile || isDockyTrailingTile {
                 actions.append(.divider)
                 actions.append(.action(String(localized: "Remove from Dock")) {
@@ -475,7 +495,7 @@ struct TileView: View {
     /// widget reads as a misfire.
     private var supportsHoverBackground: Bool {
         switch tile.content {
-        case .app, .appFolder, .folder, .trash, .launchpad:
+        case .app, .appFolder, .folder, .trash, .launchpad, .startMenu:
             true
         case .widget, .smartStack, .divider, .spacer, .flexibleSpacer,
              .minimizedWindow:
@@ -522,7 +542,7 @@ struct TileView: View {
             return folder.apps.contains { app in
                 workspace.isFrontmost(bundleIdentifier: app.bundleIdentifier)
             }
-        case .folder, .launchpad, .widget, .smartStack, .spacer, .flexibleSpacer, .divider, .trash, .minimizedWindow:
+        case .folder, .launchpad, .startMenu, .widget, .smartStack, .spacer, .flexibleSpacer, .divider, .trash, .minimizedWindow:
             return false
         }
     }
@@ -720,12 +740,14 @@ struct TileView: View {
                     if appFolderContentViewMode == .list {
                         AppFolderListMenuPresenter(
                             tile: presentedFolder,
+                            tileID: tile.id,
                             isPresented: $isAppFolderListMenuPresented,
                             preferredEdge: inwardPopoverEdge
                         )
                     } else if appFolderContentViewMode == .grid {
                         AppFolderPopoverPresenter(
                             tile: presentedFolder,
+                            tileID: tile.id,
                             isPresented: $isAppFolderPopoverPresented,
                             preferredEdge: inwardPopoverEdge
                         )
@@ -746,7 +768,7 @@ struct TileView: View {
                     )
                     .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
             }
-        case .appFolder, .launchpad, .widget, .smartStack:
+        case .appFolder, .launchpad, .startMenu, .widget, .smartStack:
             GeometryReader { proxy in
                 displayedContent
                     .frame(
@@ -816,7 +838,7 @@ struct TileView: View {
             folder.apps.contains { app in
                 workspace.isRunning(bundleIdentifier: app.bundleIdentifier)
             }
-        case .launchpad, .widget, .smartStack, .folder, .spacer, .flexibleSpacer, .divider, .trash:
+        case .launchpad, .startMenu, .widget, .smartStack, .folder, .spacer, .flexibleSpacer, .divider, .trash:
             false
         }
     }
@@ -947,7 +969,7 @@ struct TileView: View {
             return tileChromeInset
         case .appFolder, .widget, .smartStack, .folder, .trash:
             return tileChromeInset
-        case .app, .launchpad, .minimizedWindow, .spacer, .flexibleSpacer, .divider:
+        case .app, .launchpad, .startMenu, .minimizedWindow, .spacer, .flexibleSpacer, .divider:
             return 0
         }
     }
@@ -1138,6 +1160,17 @@ struct TileView: View {
                 iconOverrideURL: preferences.effectiveLaunchpadIconOverrideURL,
                 iconOverridePaddingFraction: preferences.launchpadIconPaddingFraction
             )
+        case .startMenu(let menu):
+            AppTileView(
+                tile: AppTile(
+                    bundleIdentifier: StartMenuTile.iconBundleIdentifier,
+                    displayName: menu.title
+                ),
+                clipShape: preferences.effectiveTileClipShape,
+                transparencyCompensationInset: 0,
+                iconOverrideURL: preferences.effectiveStartMenuIconOverrideURL,
+                iconOverridePaddingFraction: preferences.effectiveStartMenuIconOverridePadding
+            )
         case .widget(let widget):
             WidgetTileView(
                 tile: widget,
@@ -1183,6 +1216,8 @@ struct TileView: View {
             folder.displayName
         case .launchpad(let launchpad):
             launchpad.title
+        case .startMenu(let menu):
+            menu.title
         case .widget(let widget):
             widget.title
         case .smartStack(let stack):
@@ -1388,6 +1423,7 @@ struct TileView: View {
         case .appFolder: return "appFolder"
         case .folder: return "folder"
         case .launchpad: return "launchpad"
+        case .startMenu: return "startMenu"
         case .widget: return "widget"
         case .smartStack: return "smartStack"
         case .trash: return "trash"
@@ -1410,9 +1446,40 @@ struct TileView: View {
         windowPreviewDelayTask = nil
         WindowPreviewWindowController.shared.dismiss(sourceTileID: tile.id)
 
+        // If the Start menu is open, taps on other tiles should dismiss
+        // it (the dock-window event monitor stays out of the way so the
+        // tile's own logic can run). Skip the tiles that own the toggle:
+        // start-menu tile, and Finder when the override is enabled.
+        if StartMenuService.shared.isPresented {
+            let ownsStartMenuToggle: Bool
+            switch tile.content {
+            case .startMenu:
+                ownsStartMenuToggle = true
+            case .app(let app) where app.bundleIdentifier == "com.apple.finder"
+                 && preferences.opensStartMenuFromFinderTile
+                 && preferences.enablesStartMenuOverlay:
+                ownsStartMenuToggle = true
+            default:
+                ownsStartMenuToggle = false
+            }
+            if !ownsStartMenuToggle {
+                StartMenuService.shared.dismiss()
+            }
+        }
+
         switch tile.content {
         case .app(let app):
             isTooltipPresented = false
+            // Finder override: when the preference is on, clicking the
+            // Finder tile opens the Start menu instead of activating
+            // Finder. Gated on the Start menu being enabled so flipping
+            // that toggle off keeps the tile behaving normally.
+            if app.bundleIdentifier == "com.apple.finder",
+               preferences.opensStartMenuFromFinderTile,
+               preferences.enablesStartMenuOverlay {
+                StartMenuService.shared.toggle()
+                return
+            }
             WorkspaceService.shared.activateOrOpen(bundleIdentifier: app.bundleIdentifier)
         case .minimizedWindow(let window):
             isTooltipPresented = false
@@ -1445,6 +1512,10 @@ struct TileView: View {
             isTooltipPresented = false
             guard preferences.enablesLaunchpadOverlay else { return }
             LaunchpadOverlayService.shared.toggle()
+        case .startMenu:
+            isTooltipPresented = false
+            guard preferences.enablesStartMenuOverlay else { return }
+            StartMenuService.shared.toggle()
         case .widget(let widget):
             isTooltipPresented = false
             handleWidgetTap(widget)
@@ -1634,7 +1705,46 @@ struct TileView: View {
             fallbackAppContextActions(for: app, modifierFlags: modifierFlags)
         }
         let withWindows = injectingAppWindowActions(windows, into: actions)
-        return injectingFinderHomeNavigation(into: withWindows, for: app)
+        let withFinder = injectingFinderHomeNavigation(into: withWindows, for: app)
+        return injectingRemoveFromFolder(into: withFinder, for: app)
+    }
+
+    /// Tile id format for inline / grouped-opened children of an app folder:
+    /// `folder-running:<folderID>:<bundleIdentifier>`. When the tile under
+    /// the cursor matches this shape, surface a "Remove from Folder" action
+    /// so the user has a non-drag path to detach the app from its folder.
+    private func injectingRemoveFromFolder(
+        into actions: [ContextAction],
+        for app: AppTile
+    ) -> [ContextAction] {
+        let prefix = "folder-running:"
+        let suffix = ":\(app.bundleIdentifier)"
+        guard tile.id.hasPrefix(prefix),
+              tile.id.hasSuffix(suffix),
+              tile.id.count > prefix.count + suffix.count else {
+            return actions
+        }
+        // Inline-child tile ids embed the folder's raw identifier; the
+        // store looks folders up by their pinned-tile id ("pinned:<id>"),
+        // so re-prefix before calling removeAppFromFolder.
+        let rawFolderID = String(tile.id.dropFirst(prefix.count).dropLast(suffix.count))
+        let folderTileID = "pinned:\(rawFolderID)"
+        let bundleIdentifier = app.bundleIdentifier
+
+        var result = actions
+        if !result.isEmpty, result.last?.kind != .divider {
+            result.append(.divider)
+        }
+        result.append(.action(
+            String(localized: "Remove from Folder"),
+            image: NSImage(systemSymbolName: "folder.badge.minus", accessibilityDescription: nil)
+        ) {
+            TileStore.shared.removeAppFromFolder(
+                tileID: folderTileID,
+                bundleIdentifier: bundleIdentifier
+            )
+        })
+        return result
     }
 
     private func injectingFinderHomeNavigation(
@@ -2299,6 +2409,14 @@ private struct TileTooltipPopoverPresenter: NSViewRepresentable {
             currentTitle = title
             hostingController.rootView = TileTooltipView(title: title)
             updateContentSize()
+            // NSPopover does not reliably recenter its pointer arrow when
+            // contentSize changes on a live popover, leaving the arrow
+            // offset from the (resized) bubble when the title width changes
+            // (e.g. folder rename). Close so the next show() reopens with
+            // the arrow correctly centered against the new bubble width.
+            if popover.isShown {
+                popover.close()
+            }
         }
 
         func show(relativeTo view: NSView) {
@@ -2316,9 +2434,16 @@ private struct TileTooltipPopoverPresenter: NSViewRepresentable {
         }
 
         private func updateContentSize() {
-            let view = hostingController.view
-            view.layoutSubtreeIfNeeded()
-            let size = view.fittingSize
+            // sizeThatFits asks SwiftUI to measure the rootView for the given
+            // proposed size and works whether or not the hosting view is in a
+            // window. view.fittingSize is unreliable when the popover is
+            // hidden (e.g. while the grid popover is open), so a rename in
+            // that state would leave contentSize stale, and the next hover
+            // would show a bubble whose width didn't match its arrow.
+            let size = hostingController.sizeThatFits(
+                in: NSSize(width: CGFloat.greatestFiniteMagnitude,
+                           height: CGFloat.greatestFiniteMagnitude)
+            )
             hostingController.preferredContentSize = size
             popover.contentSize = size
         }

@@ -36,10 +36,17 @@ final class DockDragService: ObservableObject {
     /// during an external drag. Mirrors macOS Finder spring-loaded folders:
     /// hover dwell triggers the popover so the user can drop on a sub-target.
     @Published var springLoadedTileID: String?
+    /// Set when the active drag began from inside an app folder popover.
+    /// Lets the drop handler remove the app from its source folder before
+    /// pinning it at the destination, so dragging an icon out of a folder
+    /// onto the dock relocates it instead of duplicating it.
+    @Published var sourceFolderTileID: String?
+    @Published var sourceFolderBundleIdentifier: String?
 
     private var springLoadCandidateTileID: String?
     private var springLoadWorkItem: DispatchWorkItem?
     private let springLoadDwell: TimeInterval = 0.7
+    private var mouseReleasePoll: DispatchSourceTimer?
 
     private init() {}
 
@@ -58,7 +65,38 @@ final class DockDragService: ObservableObject {
         self.destinationIndex = nil
         self.destinationSection = nil
         self.documentTargetTileID = nil
+        self.sourceFolderTileID = nil
+        self.sourceFolderBundleIdentifier = nil
         clearSpringLoad()
+        cancelMouseReleasePoll()
+    }
+
+    /// Polls the global mouse-button state and clears drag state when the
+    /// primary button is released. Used by drags that begin OUTSIDE the dock
+    /// window (e.g. dragging an icon out of an app folder popover) — the
+    /// dock's `draggingEnded(_:)` only fires if the cursor passes through
+    /// the dock view, so without this a drag that drops on the desktop or
+    /// Finder would leave `kind` non-nil and freeze the dock visible.
+    func armMouseReleaseCleanup() {
+        cancelMouseReleasePoll()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        var sawPressed = false
+        timer.schedule(deadline: .now() + 0.1, repeating: 0.1)
+        timer.setEventHandler { [weak self] in
+            let pressed = (NSEvent.pressedMouseButtons & 1) != 0
+            if pressed {
+                sawPressed = true
+            } else if sawPressed {
+                self?.clear()
+            }
+        }
+        timer.resume()
+        mouseReleasePoll = timer
+    }
+
+    private func cancelMouseReleasePoll() {
+        mouseReleasePoll?.cancel()
+        mouseReleasePoll = nil
     }
 
     /// Schedules a spring-load for `tileID` after a brief dwell. Passing nil

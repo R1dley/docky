@@ -297,22 +297,27 @@ private struct WindowPreviewsDebugView: View {
     /// windows (Simulator's pill chrome, browsers' picker popovers,
     /// etc.).
     private func cgWindowFrameDescription(for window: AppWindow) -> String {
-        guard let cgID = window.cgWindowID else { return "—" }
+        guard window.cgWindowID != nil else { return "—" }
+        guard let rect = cgWindowFrame(for: window) else { return "(not found)" }
+        return formatRect(rect)
+    }
+
+    private func cgWindowFrame(for window: AppWindow) -> CGRect? {
+        guard let cgID = window.cgWindowID else { return nil }
         let descriptions = CGWindowListCopyWindowInfo(
             [.optionIncludingWindow],
             cgID
         ) as? [[String: Any]] ?? []
         guard let entry = descriptions.first,
               let boundsDict = entry[kCGWindowBounds as String] as? [String: Any] else {
-            return "(not found)"
+            return nil
         }
-        let rect = CGRect(
+        return CGRect(
             x: (boundsDict["X"] as? CGFloat) ?? 0,
             y: (boundsDict["Y"] as? CGFloat) ?? 0,
             width: (boundsDict["Width"] as? CGFloat) ?? 0,
             height: (boundsDict["Height"] as? CGFloat) ?? 0
         )
-        return formatRect(rect)
     }
 
     private func formatRect(_ rect: CGRect) -> String {

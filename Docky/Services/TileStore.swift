@@ -499,7 +499,7 @@ final class TileStore: ObservableObject {
             refreshPinnedTilesFromPreferences()
             rebuildTiles()
             return true
-        case .launchpad, .widget, .smartStack, .spacer, .flexibleSpacer, .divider:
+        case .launchpad, .startMenu, .widget, .smartStack, .spacer, .flexibleSpacer, .divider:
             return false
         }
     }
@@ -837,6 +837,8 @@ final class TileStore: ObservableObject {
                 return
             }
             item = .launchpad()
+        case .startMenu:
+            item = .startMenu()
         case .smartStack:
             guard ProductService.shared.availability(for: .smartStack, context: .newPlacement).allowsNewPlacement else {
                 return
@@ -1012,7 +1014,7 @@ final class TileStore: ObservableObject {
             return item
         case .pinned(let item):
             switch item.kind {
-            case .launchpad:
+            case .launchpad, .startMenu:
                 return nil
             case .widget:
                 guard let widgetKind = item.widgetKind,
@@ -1873,7 +1875,7 @@ final class TileStore: ObservableObject {
                     return
                 }
                 count += 1
-            case .launchpad, .widget, .smartStack, .spacer, .flexibleSpacer, .divider:
+            case .launchpad, .startMenu, .widget, .smartStack, .spacer, .flexibleSpacer, .divider:
                 count += 1
             }
         }
@@ -1919,7 +1921,7 @@ final class TileStore: ObservableObject {
                         contentViewMode: item.folderContentViewMode ?? .grid
                     )
                 }
-            case .launchpad, .widget, .smartStack, .spacer, .flexibleSpacer, .divider:
+            case .launchpad, .startMenu, .widget, .smartStack, .spacer, .flexibleSpacer, .divider:
                 return item
             }
         }
@@ -1981,6 +1983,11 @@ final class TileStore: ObservableObject {
             return Tile(
                 id: Self.pinnedTileID(for: item),
                 content: .launchpad(LaunchpadTile(identifier: item.id))
+            )
+        case .startMenu:
+            return Tile(
+                id: Self.pinnedTileID(for: item),
+                content: .startMenu(StartMenuTile(identifier: item.id))
             )
         case .widget:
             guard let widgetKind = item.widgetKind,
@@ -2490,6 +2497,8 @@ final class TileStore: ObservableObject {
             )
         case .launchpad(let launchpad):
             return .launchpad(id: launchpad.identifier)
+        case .startMenu(let menu):
+            return .startMenu(id: menu.identifier)
         case .widget, .smartStack:
             return nil
         case .spacer:
@@ -2555,7 +2564,7 @@ final class TileStore: ObservableObject {
         switch imported.kind {
         case .app:
             return existing.bundleIdentifier == imported.bundleIdentifier
-        case .launchpad:
+        case .launchpad, .startMenu:
             return existing.id == imported.id
         case .spacer, .flexibleSpacer, .divider:
             return existing.id == imported.id
@@ -2582,7 +2591,7 @@ final class TileStore: ObservableObject {
             )
         case .trash:
             return .trash()
-        case .launchpad, .widget, .smartStack, .app, .appFolder, .spacer, .flexibleSpacer, .divider, .minimizedWindow:
+        case .launchpad, .startMenu, .widget, .smartStack, .app, .appFolder, .spacer, .flexibleSpacer, .divider, .minimizedWindow:
             return nil
         }
     }

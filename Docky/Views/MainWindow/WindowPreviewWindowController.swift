@@ -106,13 +106,22 @@ final class WindowPreviewWindowController: NSWindowController, ObservableObject 
         dismissAnimationTask = nil
         beginDockVisibilityHoldIfNeeded()
 
-        let rootView = WindowPreviewWindowContent(sourceTileID: sourceTileID)
-        let hostingView = NSHostingView(rootView: rootView)
-        hostingView.layoutSubtreeIfNeeded()
-        let fittingSize = hostingView.fittingSize
+        // Two-pass sizing: measure the natural content, then re-host the
+        // root view inside an explicit centered frame so the content stays
+        // visually centered when the window is floored to the minimum
+        // size (one-card thumbnail layouts are narrower than 240pt, and
+        // NSHostingView would otherwise top-leading-align the content,
+        // leaving the visible card offset from the source tile's midX).
+        let sizingHostingView = NSHostingView(rootView: WindowPreviewWindowContent(sourceTileID: sourceTileID))
+        sizingHostingView.layoutSubtreeIfNeeded()
+        let fittingSize = sizingHostingView.fittingSize
         let windowSize = CGSize(
             width: max(fittingSize.width, 240),
             height: max(fittingSize.height, 80)
+        )
+        let hostingView = NSHostingView(
+            rootView: WindowPreviewWindowContent(sourceTileID: sourceTileID)
+                .frame(width: windowSize.width, height: windowSize.height)
         )
 
         let finalOrigin = frameOrigin(

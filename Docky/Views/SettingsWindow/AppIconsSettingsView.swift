@@ -52,6 +52,15 @@ struct AppIconsSettingsView: View {
                     .padding(.vertical, 4)
             }
 
+            Section("Start Menu") {
+                Text("Pick a custom image for the Start Menu tile. Defaults to Docky's own app icon.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                StartMenuIconOverrideRow()
+                    .padding(.vertical, 4)
+            }
+
             Section("Overrides") {
                 if !product.isUnlocked(.customAppIcons) {
                     ProFeatureNotice(feature: .customAppIcons)
@@ -782,6 +791,118 @@ private struct LaunchpadIconOverrideRow: View {
 
         if panel.runModal() == .OK, let url = panel.url {
             preferences.launchpadIconPath = url.path
+        }
+    }
+}
+
+private struct StartMenuIconOverrideRow: View {
+    @Bindable private var preferences = DockyPreferences.shared
+    @ObservedObject private var product = ProductService.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(nsImage: previewImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 36, height: 36)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Start Menu")
+                        .font(.headline)
+
+                    Text("Replaces the Start Menu tile's icon.")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+
+                    if let overrideName {
+                        Text("Override: \(overrideName)")
+                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                    }
+                }
+
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Button("Choose Image...") {
+                        chooseOverrideImage()
+                    }
+                    .disabled(!product.isUnlocked(.customAppIcons))
+
+                    if hasOverride {
+                        Button("Clear") {
+                            preferences.startMenuIconPath = nil
+                            preferences.startMenuIconPaddingFraction = nil
+                        }
+                        .disabled(!product.isUnlocked(.customAppIcons))
+                    }
+                }
+            }
+
+            if hasOverride {
+                paddingSlider
+            }
+        }
+    }
+
+    private var paddingSlider: some View {
+        HStack(spacing: 8) {
+            Text("Padding")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Slider(value: paddingFractionBinding, in: 0...0.5, step: 0.01)
+                .controlSize(.small)
+                .disabled(!product.isUnlocked(.customAppIcons))
+
+            Text("\(Int((preferences.startMenuIconPaddingFraction ?? 0) * 100))%")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .frame(width: 36, alignment: .trailing)
+        }
+    }
+
+    private var paddingFractionBinding: Binding<CGFloat> {
+        Binding(
+            get: { preferences.startMenuIconPaddingFraction ?? 0 },
+            set: { newValue in
+                let clamped = min(max(newValue, 0), 0.5)
+                preferences.startMenuIconPaddingFraction = clamped == 0 ? nil : clamped
+            }
+        )
+    }
+
+    private var hasOverride: Bool {
+        guard let path = preferences.startMenuIconPath else { return false }
+        return !path.isEmpty
+    }
+
+    private var overrideName: String? {
+        guard let path = preferences.startMenuIconPath, !path.isEmpty else {
+            return nil
+        }
+        return URL(fileURLWithPath: path).lastPathComponent
+    }
+
+    private var previewImage: NSImage {
+        if let overrideURL = preferences.effectiveStartMenuIconOverrideURL,
+           let overrideImage = IconCacheService.shared.image(forImageFileURL: overrideURL) {
+            return overrideImage
+        }
+        return IconCacheService.shared.icon(forBundleIdentifier: StartMenuTile.iconBundleIdentifier)
+    }
+
+    private func chooseOverrideImage() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+
+        if panel.runModal() == .OK, let url = panel.url {
+            preferences.startMenuIconPath = url.path
         }
     }
 }

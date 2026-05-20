@@ -230,6 +230,33 @@ final class MainWindow: NSPanel {
         visibilityState == .visible ? frame : nil
     }
 
+    /// Screen-coordinate rect of the visible chrome (the dock pill itself,
+    /// not the magnification headroom around it). Built from `chromeSize`
+    /// rather than crossing the SwiftUI/AppKit coord boundary, since the
+    /// chrome is always centered along-axis within the window (in
+    /// full-axis mode it just happens to span edge-to-edge), and pinned
+    /// to the inward cross-axis edge with magnification headroom on the
+    /// other side. Overlays that need to align to chrome edges read this.
+    func chromeScreenFrame() -> CGRect? {
+        let chromeSize = DockLayoutService.shared.chromeSize
+        guard chromeSize.width > 0, chromeSize.height > 0 else { return nil }
+        let position = DockyPreferences.shared.windowPosition
+            .resolved(systemOrientation: DockSettingsService.shared.orientation)
+        let f = frame
+        let width = min(chromeSize.width, f.width)
+        let height = min(chromeSize.height, f.height)
+        switch position {
+        case .bottom:
+            return CGRect(x: f.midX - width / 2, y: f.minY, width: width, height: height)
+        case .top:
+            return CGRect(x: f.midX - width / 2, y: f.maxY - height, width: width, height: height)
+        case .left:
+            return CGRect(x: f.minX, y: f.midY - height / 2, width: width, height: height)
+        case .right:
+            return CGRect(x: f.maxX - width, y: f.midY - height / 2, width: width, height: height)
+        }
+    }
+
     override init(contentRect: NSRect, styleMask style: NSWindow.StyleMask, backing backingStoreType: NSWindow.BackingStoreType, defer flag: Bool) {
         visibilityState = DockyPreferences.shared.autohidesWindow ? .hidden : .visible
         // Force `.nonactivatingPanel` regardless of what the XIB hands us so
@@ -358,6 +385,25 @@ final class MainWindow: NSPanel {
             .sink { [weak self] isActive in
                 guard let self else { return }
                 if isActive {
+                    self.hideWorkItem?.cancel()
+                    self.setVisibility(.visible, animated: true)
+                } else {
+                    self.scheduleHideIfNeeded()
+                }
+            }
+            .store(in: &cancellables)
+
+        // Keep the dock visible while any drag is in flight (Finder→dock,
+        // palette, or icon-out-of-folder). The cursor can briefly be outside
+        // the dock window during the transit, so without this the dock would
+        // start to auto-hide just as the user is moving the drag toward it.
+        DockDragService.shared.$kind
+            .map { $0 != nil }
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] hasDrag in
+                guard let self else { return }
+                if hasDrag {
                     self.hideWorkItem?.cancel()
                     self.setVisibility(.visible, animated: true)
                 } else {
@@ -597,7 +643,7 @@ final class MainWindow: NSPanel {
     }
 
     private var shouldRemainVisible: Bool {
-        isPointerInsideWindow || activeInteractionCount > 0 || editMode.isActive
+        isPointerInsideWindow || activeInteractionCount > 0 || editMode.isActive || DockDragService.shared.kind != nil
     }
 
     private func setVisibility(_ state: VisibilityState, animated: Bool) {

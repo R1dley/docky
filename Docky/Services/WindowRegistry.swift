@@ -118,14 +118,54 @@ final class WindowRegistry: ObservableObject {
     }
 
     /// Windows that are visible (non-minimized) and large enough to be
-    /// interactable — the natural "switchable" set.
+    /// interactable — the natural "switchable" set. Also gated by
+    /// `isCapturable`, so windows the switcher / preview pipeline can't
+    /// usefully represent never leak through.
     var visible: [AppWindow] {
         windows.filter { window in
             guard !window.isMinimized else { return false }
-            guard let size = window.frame?.size else { return true }
-            return size.width >= minimumTrackedWindowSize.width
-                && size.height >= minimumTrackedWindowSize.height
+            return isCapturable(window)
         }
+    }
+
+    /// True when a window has a working CGWindowID, the WindowServer
+    /// still reports bounds for it, and those bounds are large enough
+    /// to be a real content window (>= 100x100). Filters out auxiliary
+    /// overlays, menu-bar strips, and AX entries whose underlying CG
+    /// window has already gone away. Independent of minimized state —
+    /// per-tile hover previews legitimately want minimized windows so
+    /// long as they're real windows.
+    func isCapturable(_ window: AppWindow) -> Bool {
+        if let size = window.frame?.size,
+           size.width < minimumTrackedWindowSize.width
+            || size.height < minimumTrackedWindowSize.height {
+            return false
+        }
+        guard let cgWindowID = window.cgWindowID,
+              let cgFrame = cgWindowFrame(forID: cgWindowID) else {
+            return false
+        }
+        return cgFrame.width >= minimumTrackedWindowSize.width
+            && cgFrame.height >= minimumTrackedWindowSize.height
+    }
+
+    /// OS-reported bounds for a CGWindowID, or nil when the window no
+    /// longer exists from the WindowServer's perspective.
+    private func cgWindowFrame(forID cgWindowID: CGWindowID) -> CGRect? {
+        let descriptions = CGWindowListCopyWindowInfo(
+            [.optionIncludingWindow],
+            cgWindowID
+        ) as? [[String: Any]] ?? []
+        guard let entry = descriptions.first,
+              let boundsDict = entry[kCGWindowBounds as String] as? [String: Any] else {
+            return nil
+        }
+        return CGRect(
+            x: (boundsDict["X"] as? CGFloat) ?? 0,
+            y: (boundsDict["Y"] as? CGFloat) ?? 0,
+            width: (boundsDict["Width"] as? CGFloat) ?? 0,
+            height: (boundsDict["Height"] as? CGFloat) ?? 0
+        )
     }
 
     private var applicationObservers: [pid_t: AXObserver] = [:]

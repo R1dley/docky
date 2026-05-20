@@ -9,6 +9,7 @@ import CoreGraphics
 
 enum DockEditPaletteItem: Equatable, Identifiable {
     case launchpad
+    case startMenu
     case spacer
     case flexibleSpacer
     case divider
@@ -19,6 +20,8 @@ enum DockEditPaletteItem: Equatable, Identifiable {
         switch self {
         case .launchpad:
             "launchpad"
+        case .startMenu:
+            "start-menu"
         case .spacer:
             "spacer"
         case .flexibleSpacer:

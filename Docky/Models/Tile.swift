@@ -20,6 +20,7 @@ enum TileContent: Equatable {
     case minimizedWindow(AppWindow)
     case appFolder(AppFolderTile)
     case launchpad(LaunchpadTile)
+    case startMenu(StartMenuTile)
     case widget(WidgetTile)
     case smartStack(SmartStackTile)
     case folder(FolderTile)
@@ -78,6 +79,22 @@ struct LaunchpadTile: Equatable {
     let title: String
 
     nonisolated init(identifier: String, title: String = "Launchpad") {
+        self.identifier = identifier
+        self.title = title
+    }
+}
+
+/// Tile that, when clicked, toggles Docky's Start menu overlay. Renders
+/// as a regular AppTileView pointed at Docky's own bundle id so the icon
+/// pipeline resolves to the running app icon (and the user can swap it
+/// out via the App Icons settings pane like the Launchpad tile).
+struct StartMenuTile: Equatable {
+    nonisolated static let iconBundleIdentifier = "gt.quintero.Docky"
+
+    let identifier: String
+    let title: String
+
+    nonisolated init(identifier: String, title: String = "Start") {
         self.identifier = identifier
         self.title = title
     }

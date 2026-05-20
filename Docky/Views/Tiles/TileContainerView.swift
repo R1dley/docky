@@ -456,6 +456,11 @@ struct TileContainerView: View {
                 id: "editor-preview:launchpad",
                 content: .launchpad(LaunchpadTile(identifier: "editor-preview:launchpad"))
             )
+        case .startMenu:
+            return Tile(
+                id: "editor-preview:start-menu",
+                content: .startMenu(StartMenuTile(identifier: "editor-preview:start-menu"))
+            )
         case .spacer:
             return Tile(id: "editor-preview:spacer", content: .spacer)
         case .flexibleSpacer:
@@ -954,7 +959,7 @@ struct TileContainerView: View {
                 return effectiveWidgetSpan(widget.span) == .one
             }
             return true
-        case .folder, .trash, .appFolder, .minimizedWindow, .launchpad, .spacer, .flexibleSpacer:
+        case .folder, .trash, .appFolder, .minimizedWindow, .launchpad, .startMenu, .spacer, .flexibleSpacer:
             return true
         case .widget(let widget):
             return effectiveWidgetSpan(widget.span) == .one
@@ -1171,6 +1176,14 @@ struct TileContainerView: View {
     }
 
     private func isTileDraggable(_ tile: Tile) -> Bool {
+        // Inline children of an app folder (rendered next to the folder
+        // tile in inline / grouped-opened modes) are derived from the
+        // folder's contents — reordering them as standalone tiles would
+        // detach the relationship. Force users through the explicit
+        // "Remove from Folder" action instead.
+        if tile.id.hasPrefix("folder-running:") {
+            return false
+        }
         switch tile.content {
         case .app(let app):
             return !app.bundleIdentifier.isEmpty && app.bundleIdentifier != "com.apple.finder"
@@ -1180,7 +1193,7 @@ struct TileContainerView: View {
             return isPinnedReorderable(tileID: tile.id)
         case .widget, .smartStack:
             return isPinnedReorderable(tileID: tile.id) || isTrailingReorderable(tileID: tile.id)
-        case .launchpad, .spacer, .flexibleSpacer, .divider:
+        case .launchpad, .startMenu, .spacer, .flexibleSpacer, .divider:
             return editMode.isActive && (isPinnedReorderable(tileID: tile.id) || isTrailingReorderable(tileID: tile.id))
         case .folder, .trash:
             return editMode.isActive && isTrailingReorderable(tileID: tile.id)
@@ -1209,6 +1222,8 @@ struct TileContainerView: View {
         return switch paletteItem {
         case .launchpad:
             PinnedTileItem.launchpad()
+        case .startMenu:
+            PinnedTileItem.startMenu()
         case .spacer:
             PinnedTileItem.spacer()
         case .flexibleSpacer:
@@ -1243,6 +1258,8 @@ struct TileContainerView: View {
 
         return switch paletteDrag.item {
         case .launchpad:
+            nil
+        case .startMenu:
             nil
         case .spacer:
             TrailingTileItem.spacer()
@@ -1853,6 +1870,8 @@ struct TileContainerView: View {
             return "divider"
         case .launchpad:
             return "launchpad"
+        case .startMenu:
+            return "startMenu"
         case .trash:
             return "trash"
         case .minimizedWindow(let window):
@@ -1887,7 +1906,7 @@ struct TileContainerView: View {
                 guard folder.bundleIdentifiers.allSatisfy({ !selectedBundleIdentifierSet.contains($0) }) else {
                     continue
                 }
-            case .launchpad, .widget, .smartStack, .folder, .spacer, .flexibleSpacer, .divider, .trash:
+            case .launchpad, .startMenu, .widget, .smartStack, .folder, .spacer, .flexibleSpacer, .divider, .trash:
                 continue
             }
 
@@ -2098,6 +2117,11 @@ struct TileContainerView: View {
             return Tile(
                 id: "editor-preview:launchpad",
                 content: .launchpad(LaunchpadTile(identifier: "editor-preview:launchpad"))
+            )
+        case .startMenu:
+            return Tile(
+                id: "editor-preview:start-menu",
+                content: .startMenu(StartMenuTile(identifier: "editor-preview:start-menu"))
             )
         case .spacer:
             return Tile(id: "editor-preview:spacer", content: .spacer)

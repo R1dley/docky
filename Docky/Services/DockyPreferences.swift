@@ -17,6 +17,7 @@ enum PinnedTileItemKind: String, Codable, Equatable {
     case app
     case appFolder
     case launchpad
+    case startMenu
     case widget
     case smartStack
     case spacer
@@ -105,6 +106,22 @@ struct PinnedTileItem: Codable, Equatable, Identifiable {
         Self(
             id: id,
             kind: .launchpad,
+            bundleIdentifier: nil,
+            folderDisplayName: nil,
+            folderBundleIdentifiers: [],
+            appFolderDisplayMode: nil,
+            folderContentViewMode: nil,
+            widgetKind: nil,
+            widgetOwnerBundleIdentifier: nil,
+            widgetSpan: nil,
+            hiddenWidgetOwnerBundleIdentifiers: []
+        )
+    }
+
+    nonisolated static func startMenu(id: String = "custom:\(UUID().uuidString)") -> Self {
+        Self(
+            id: id,
+            kind: .startMenu,
             bundleIdentifier: nil,
             folderDisplayName: nil,
             folderBundleIdentifiers: [],
@@ -2117,6 +2134,32 @@ enum LaunchpadLayoutAxis: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    /// Optional image path used to replace the Start Menu tile's icon.
+    var startMenuIconPath: String? {
+        didSet {
+            guard startMenuIconPath != oldValue else { return }
+
+            if let startMenuIconPath, !startMenuIconPath.isEmpty {
+                defaults.set(startMenuIconPath, forKey: Keys.startMenuIconPath)
+            } else {
+                defaults.removeObject(forKey: Keys.startMenuIconPath)
+            }
+        }
+    }
+
+    /// Optional padding fraction applied around the Start Menu override icon.
+    var startMenuIconPaddingFraction: CGFloat? {
+        didSet {
+            guard startMenuIconPaddingFraction != oldValue else { return }
+
+            if let startMenuIconPaddingFraction {
+                defaults.set(Double(startMenuIconPaddingFraction), forKey: Keys.startMenuIconPaddingFraction)
+            } else {
+                defaults.removeObject(forKey: Keys.startMenuIconPaddingFraction)
+            }
+        }
+    }
+
     /// Bundle identifiers hidden from Docky's app tile surfaces.
     var hiddenAppBundleIdentifiers: [String] {
         didSet {
@@ -2160,6 +2203,26 @@ enum LaunchpadLayoutAxis: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard enablesLaunchpadOverlay != oldValue else { return }
             defaults.set(enablesLaunchpadOverlay, forKey: Keys.enablesLaunchpadOverlay)
+        }
+    }
+
+    /// Whether Docky's Start menu overlay is enabled. Gates the tile
+    /// click handler, the ⌃⌥S hotkey, and visibility of the Start menu
+    /// widget in the dock editor palette.
+    var enablesStartMenuOverlay: Bool {
+        didSet {
+            guard enablesStartMenuOverlay != oldValue else { return }
+            defaults.set(enablesStartMenuOverlay, forKey: Keys.enablesStartMenuOverlay)
+        }
+    }
+
+    /// When true, clicking the Finder tile opens the Start menu instead
+    /// of activating Finder. Off by default so the Finder tile behaves
+    /// like every other app tile unless the user opts in.
+    var opensStartMenuFromFinderTile: Bool {
+        didSet {
+            guard opensStartMenuFromFinderTile != oldValue else { return }
+            defaults.set(opensStartMenuFromFinderTile, forKey: Keys.opensStartMenuFromFinderTile)
         }
     }
 
@@ -3124,6 +3187,24 @@ enum LaunchpadLayoutAxis: String, CaseIterable, Codable, Identifiable {
         return launchpadIconPaddingFraction ?? 0
     }
 
+    var effectiveStartMenuIconOverrideURL: URL? {
+        guard ProductService.shared.isUnlocked(.customAppIcons) else {
+            return nil
+        }
+        guard let path = startMenuIconPath, !path.isEmpty else {
+            return nil
+        }
+        guard FileManager.default.fileExists(atPath: path) else {
+            return nil
+        }
+        return URL(fileURLWithPath: path)
+    }
+
+    var effectiveStartMenuIconOverridePadding: CGFloat {
+        guard effectiveStartMenuIconOverrideURL != nil else { return 0 }
+        return startMenuIconPaddingFraction ?? 0
+    }
+
     func isAppHiddenInDocky(bundleIdentifier: String) -> Bool {
         // Docky reports itself as effectively hidden so any surface that
         // gates on this returns the right answer even though Docky never
@@ -3245,10 +3326,14 @@ enum LaunchpadLayoutAxis: String, CaseIterable, Codable, Identifiable {
         static let folderIconOverrides = "docky.folderIconOverrides"
         static let launchpadIconPath = "docky.launchpadIconPath"
         static let launchpadIconPaddingFraction = "docky.launchpadIconPaddingFraction"
+        static let startMenuIconPath = "docky.startMenuIconPath"
+        static let startMenuIconPaddingFraction = "docky.startMenuIconPaddingFraction"
         static let hiddenAppBundleIdentifiers = "docky.hiddenAppBundleIdentifiers"
         static let showsGroupedOpenedAppsInDock = "docky.showsGroupedOpenedAppsInDock"
         static let showsGroupedOpenedAppsBackdrop = "docky.showsGroupedOpenedAppsBackdrop"
         static let enablesLaunchpadOverlay = "docky.enablesLaunchpadOverlay"
+        static let enablesStartMenuOverlay = "docky.enablesStartMenuOverlay"
+        static let opensStartMenuFromFinderTile = "docky.opensStartMenuFromFinderTile"
         static let launchpadOverlayTransparency = "docky.launchpadOverlayTransparency"
         static let launchpadGridColumnCount = "docky.launchpadGridColumnCount"
         static let launchpadGridRowCount = "docky.launchpadGridRowCount"
@@ -3335,10 +3420,14 @@ enum LaunchpadLayoutAxis: String, CaseIterable, Codable, Identifiable {
         static let folderIconOverrides: [FolderIconOverride] = []
         static let launchpadIconPath: String? = nil
         static let launchpadIconPaddingFraction: CGFloat? = nil
+        static let startMenuIconPath: String? = nil
+        static let startMenuIconPaddingFraction: CGFloat? = nil
         static let hiddenAppBundleIdentifiers: [String] = []
         static let showsGroupedOpenedAppsInDock = true
         static let showsGroupedOpenedAppsBackdrop = true
         static let enablesLaunchpadOverlay = true
+        static let enablesStartMenuOverlay = true
+        static let opensStartMenuFromFinderTile = false
         static let launchpadOverlayTransparency: CGFloat = 0.4
         static let launchpadGridColumnCount = 7
         static let launchpadGridRowCount = 5
@@ -3444,10 +3533,14 @@ enum LaunchpadLayoutAxis: String, CaseIterable, Codable, Identifiable {
         let storedFolderIconOverrides = defaults.data(forKey: Keys.folderIconOverrides)
         let storedLaunchpadIconPath = defaults.string(forKey: Keys.launchpadIconPath)
         let storedLaunchpadIconPaddingFraction = defaults.object(forKey: Keys.launchpadIconPaddingFraction) as? Double
+        let storedStartMenuIconPath = defaults.string(forKey: Keys.startMenuIconPath)
+        let storedStartMenuIconPaddingFraction = defaults.object(forKey: Keys.startMenuIconPaddingFraction) as? Double
         let storedHiddenAppBundleIdentifiers = defaults.stringArray(forKey: Keys.hiddenAppBundleIdentifiers)
         let storedShowsGroupedOpenedAppsInDock = defaults.object(forKey: Keys.showsGroupedOpenedAppsInDock) as? Bool
         let storedShowsGroupedOpenedAppsBackdrop = defaults.object(forKey: Keys.showsGroupedOpenedAppsBackdrop) as? Bool
         let storedEnablesLaunchpadOverlay = defaults.object(forKey: Keys.enablesLaunchpadOverlay) as? Bool
+        let storedEnablesStartMenuOverlay = defaults.object(forKey: Keys.enablesStartMenuOverlay) as? Bool
+        let storedOpensStartMenuFromFinderTile = defaults.object(forKey: Keys.opensStartMenuFromFinderTile) as? Bool
         let storedLaunchpadOverlayTransparency = defaults.object(forKey: Keys.launchpadOverlayTransparency) as? Double
         let storedLaunchpadGridColumnCount = defaults.object(forKey: Keys.launchpadGridColumnCount) as? Int
         let storedLaunchpadGridRowCount = defaults.object(forKey: Keys.launchpadGridRowCount) as? Int
@@ -3557,11 +3650,15 @@ enum LaunchpadLayoutAxis: String, CaseIterable, Codable, Identifiable {
         self.folderIconOverrides = Self.decodeFolderIconOverrides(from: storedFolderIconOverrides) ?? DefaultValues.folderIconOverrides
         self.launchpadIconPath = storedLaunchpadIconPath ?? DefaultValues.launchpadIconPath
         self.launchpadIconPaddingFraction = storedLaunchpadIconPaddingFraction.map { CGFloat($0) }
+        self.startMenuIconPath = storedStartMenuIconPath ?? DefaultValues.startMenuIconPath
+        self.startMenuIconPaddingFraction = storedStartMenuIconPaddingFraction.map { CGFloat($0) }
             ?? DefaultValues.launchpadIconPaddingFraction
         self.hiddenAppBundleIdentifiers = Self.normalizedBundleIdentifiers(storedHiddenAppBundleIdentifiers ?? DefaultValues.hiddenAppBundleIdentifiers)
         self.showsGroupedOpenedAppsInDock = storedShowsGroupedOpenedAppsInDock ?? DefaultValues.showsGroupedOpenedAppsInDock
         self.showsGroupedOpenedAppsBackdrop = storedShowsGroupedOpenedAppsBackdrop ?? DefaultValues.showsGroupedOpenedAppsBackdrop
         self.enablesLaunchpadOverlay = storedEnablesLaunchpadOverlay ?? DefaultValues.enablesLaunchpadOverlay
+        self.enablesStartMenuOverlay = storedEnablesStartMenuOverlay ?? DefaultValues.enablesStartMenuOverlay
+        self.opensStartMenuFromFinderTile = storedOpensStartMenuFromFinderTile ?? DefaultValues.opensStartMenuFromFinderTile
         self.launchpadOverlayTransparency = min(max(
             storedLaunchpadOverlayTransparency.map { CGFloat($0) } ?? DefaultValues.launchpadOverlayTransparency,
             0
@@ -3838,10 +3935,14 @@ enum LaunchpadLayoutAxis: String, CaseIterable, Codable, Identifiable {
         folderIconOverrides = DefaultValues.folderIconOverrides
         launchpadIconPath = DefaultValues.launchpadIconPath
         launchpadIconPaddingFraction = DefaultValues.launchpadIconPaddingFraction
+        startMenuIconPath = DefaultValues.startMenuIconPath
+        startMenuIconPaddingFraction = DefaultValues.startMenuIconPaddingFraction
         hiddenAppBundleIdentifiers = DefaultValues.hiddenAppBundleIdentifiers
         showsGroupedOpenedAppsInDock = DefaultValues.showsGroupedOpenedAppsInDock
         showsGroupedOpenedAppsBackdrop = DefaultValues.showsGroupedOpenedAppsBackdrop
         enablesLaunchpadOverlay = DefaultValues.enablesLaunchpadOverlay
+        enablesStartMenuOverlay = DefaultValues.enablesStartMenuOverlay
+        opensStartMenuFromFinderTile = DefaultValues.opensStartMenuFromFinderTile
         launchpadOverlayTransparency = DefaultValues.launchpadOverlayTransparency
         launchpadGridColumnCount = DefaultValues.launchpadGridColumnCount
         launchpadGridRowCount = DefaultValues.launchpadGridRowCount

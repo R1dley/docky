@@ -146,7 +146,7 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
 
     nonisolated static let allItems: [DockEditorGalleryItem] = WidgetCatalog.paletteRegistrations.map(Self.makeWidgetItem)
         + [makeSmartStackItem()]
-        + [makeUtilityItem(.launchpad), makeUtilityItem(.spacer), makeUtilityItem(.flexibleSpacer), makeUtilityItem(.divider)]
+        + [makeUtilityItem(.launchpad), makeUtilityItem(.startMenu), makeUtilityItem(.spacer), makeUtilityItem(.flexibleSpacer), makeUtilityItem(.divider)]
 
     nonisolated private static func makeWidgetItem(registration: WidgetRegistration) -> Self {
         let paletteItem = DockEditPaletteItem.widget(
@@ -219,6 +219,8 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
         switch item {
         case .launchpad:
             String(localized: "Launchpad")
+        case .startMenu:
+            String(localized: "Start Menu")
         case .spacer:
             String(localized: "Spacer")
         case .flexibleSpacer:
@@ -236,6 +238,8 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
         switch item {
         case .launchpad:
             String(localized: "Shows a fullscreen launcher with all installed apps on a blurred backdrop.")
+        case .startMenu:
+            String(localized: "Opens a compact menu with recent files, all apps, and power options pinned next to the dock.")
         case .spacer:
             String(localized: "Adds breathing room between pinned tiles or folders.")
         case .flexibleSpacer:
@@ -274,6 +278,8 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
         switch item {
         case .launchpad:
             "square.grid.3x3.fill"
+        case .startMenu:
+            "square.grid.2x2"
         case .spacer:
             "rectangle.split.3x1"
         case .flexibleSpacer:
@@ -903,6 +909,18 @@ private struct DockEditorItemPreview: View {
                     transparencyCompensationInset: 0
                 )
                 .frame(width: previewSize.width, height: previewSize.height)
+            case .startMenu:
+                AppTileView(
+                    tile: AppTile(
+                        bundleIdentifier: StartMenuTile.iconBundleIdentifier,
+                        displayName: item.title
+                    ),
+                    clipShape: preferences.effectiveTileClipShape,
+                    transparencyCompensationInset: 0,
+                    iconOverrideURL: preferences.effectiveStartMenuIconOverrideURL,
+                    iconOverridePaddingFraction: preferences.effectiveStartMenuIconOverridePadding
+                )
+                .frame(width: previewSize.width, height: previewSize.height)
             case .widget(let ownerBundleIdentifier, let kind):
                 WidgetTileView(
                     tile: WidgetTile(
@@ -946,7 +964,7 @@ private struct DockEditorItemPreview: View {
 
     private var size: CGSize {
         switch item.paletteItem {
-        case .launchpad:
+        case .launchpad, .startMenu:
             return CGSize(width: scale.tileHeight, height: scale.tileHeight)
         case .widget:
             let span = CGFloat((item.resolvedSpan(selectedSpan: selectedSpan) ?? .one).rawValue)

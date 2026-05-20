@@ -431,10 +431,19 @@ final class ClickThroughHostingView: NSHostingView<MainWindowView> {
                 destinationIndex.map(String.init) ?? "nil",
                 targetTileID ?? "nil"
             )
+            let sourceFolderTileID = DockDragService.shared.sourceFolderTileID
+            let sourceFolderBundleIdentifier = DockDragService.shared.sourceFolderBundleIdentifier
             defer { DockDragService.shared.clear() }
             switch kind {
             case .app(_, let tile):
                 guard let index = destinationIndex else { return false }
+                if let sourceFolderTileID,
+                   sourceFolderBundleIdentifier == tile.bundleIdentifier {
+                    TileStore.shared.removeAppFromFolder(
+                        tileID: sourceFolderTileID,
+                        bundleIdentifier: tile.bundleIdentifier
+                    )
+                }
                 return TileStore.shared.pinApp(bundleIdentifier: tile.bundleIdentifier, at: index)
             case .folder(let url, let tile):
                 if let targetTileID,
