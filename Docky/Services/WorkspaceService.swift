@@ -652,6 +652,36 @@ final class WorkspaceService: ObservableObject {
                 self?.refresh()
             }
             .store(in: &cancellables)
+
+        // Targeted preview invalidations from the registry: resize-aspect
+        // changes and the outgoing window on focus switches. Fires more
+        // often than the per-window TTL but only for the few windows
+        // where the cached image is provably stale.
+        WindowRegistry.shared.previewInvalidations
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] windowIdentifier in
+                self?.invalidateAppWindowPreview(windowIdentifier: windowIdentifier)
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Drops the cached app-window preview for a single window so the
+    /// next refresh pass re-captures it. Used by registry-driven
+    /// invalidations (resize, focus-out) which know more than the TTL
+    /// does about when a cached image stopped being representative.
+    private func invalidateAppWindowPreview(windowIdentifier: String) {
+        guard ProductService.shared.isUnlocked(.windowSwitcher),
+              PermissionsService.shared.screenCapture == .granted else {
+            return
+        }
+        var didChange = false
+        if appWindowPreviews.removeValue(forKey: windowIdentifier) != nil {
+            didChange = true
+        }
+        appWindowPreviewMetadata.removeValue(forKey: windowIdentifier)
+        attemptedAppWindowPreviewIDs.remove(windowIdentifier)
+        guard didChange else { return }
+        refreshAppWindowPreviews(for: WindowRegistry.shared.visible)
     }
 
     /// Debug-only: clear the "already attempted" set so every visible

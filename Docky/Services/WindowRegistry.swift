@@ -111,6 +111,18 @@ final class WindowRegistry: ObservableObject {
     /// hole that the next snapshot fills.
     @Published private(set) var windows: [AppWindow] = []
 
+    /// Fires when a window's cached preview should be evicted and re-
+    /// captured, even though the registry's `$windows` array hasn't
+    /// changed shape. Emitted on resize (aspect ratio changed) and on
+    /// focus-out (capture the outgoing window while it's still on top).
+    /// The associated value is `AppWindow.windowIdentifier`.
+    let previewInvalidations = PassthroughSubject<String, Never>()
+
+    /// Per-pid tracking of the AX-focused window so we can name the
+    /// outgoing window when focus changes. Only used to drive preview
+    /// invalidation; the canonical list ordering still lives in `windows`.
+    private var lastFocusedWindowIDByPID: [pid_t: WindowID] = [:]
+
     /// Windows currently minimized, in observation order. Newest minimized
     /// last — `last(where: bundleID:)` gives the most-recently minimized.
     var minimized: [AppWindow] {
@@ -600,6 +612,9 @@ final class WindowRegistry: ObservableObject {
             // Per-window MRU: the notification's element IS the now-focused
             // window. Move just that one to the front; the app's other
             // windows stay where they were in the global list.
+            let newFocusedID = WindowID(element: element)
+            invalidateOutgoingFocusedPreview(pid: pid, newFocusedID: newFocusedID)
+            lastFocusedWindowIDByPID[pid] = newFocusedID
             bumpWindowToTop(element: element, pid: pid)
 
         case kAXApplicationActivatedNotification,
@@ -615,7 +630,17 @@ final class WindowRegistry: ObservableObject {
             // from a notification). Don't bump — just refresh in place.
             syncWindows(for: pid)
 
-        case kAXWindowMovedNotification, kAXWindowResizedNotification:
+        case kAXWindowMovedNotification:
+            updateFrameOrSync(element: element, pid: pid)
+
+        case kAXWindowResizedNotification:
+            // Aspect ratio likely changed; the cached thumbnail will look
+            // squished in the preview card. Drop it before the frame
+            // update so the refresh that follows kicks off a recapture.
+            let target = WindowID(element: element)
+            if let resized = windows.first(where: { $0.id == target }) {
+                previewInvalidations.send(resized.windowIdentifier)
+            }
             updateFrameOrSync(element: element, pid: pid)
 
         case kAXTitleChangedNotification:
@@ -790,8 +815,23 @@ final class WindowRegistry: ObservableObject {
     }
 
     private func removeWindows(for pid: pid_t) {
+        lastFocusedWindowIDByPID.removeValue(forKey: pid)
         guard windows.contains(where: { $0.processIdentifier == pid }) else { return }
         windows.removeAll { $0.processIdentifier == pid }
+    }
+
+    /// Emits a preview-invalidation for the window that just lost focus
+    /// (the previous focused window of `pid`), so WorkspaceService can
+    /// drop its stale capture and grab a fresh one while the window is
+    /// still on top. No-op when the previous and new focused windows
+    /// are the same, or when we have no prior record for this pid.
+    private func invalidateOutgoingFocusedPreview(pid: pid_t, newFocusedID: WindowID) {
+        guard let previousID = lastFocusedWindowIDByPID[pid],
+              previousID != newFocusedID,
+              let outgoing = windows.first(where: { $0.id == previousID }) else {
+            return
+        }
+        previewInvalidations.send(outgoing.windowIdentifier)
     }
 
     private func removeWindow(matching element: AXUIElement, pid: pid_t) {

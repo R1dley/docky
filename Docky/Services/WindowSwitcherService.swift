@@ -197,6 +197,18 @@ final class WindowSwitcherService: ObservableObject {
         dismissIfShortcutReleased(flags: NSEvent.modifierFlags)
     }
 
+    func minimizeSelectedWindow() {
+        guard let window = selectedWindow else { return }
+        _ = WorkspaceService.shared.minimize(window: window)
+    }
+
+    func closeSelectedWindow() {
+        guard let window = selectedWindow else { return }
+        if WorkspaceService.shared.close(window: window) {
+            removeWindow(withIdentifier: window.windowIdentifier)
+        }
+    }
+
     func removeWindow(withIdentifier identifier: String) {
         guard let removedIndex = windows.firstIndex(where: { $0.windowIdentifier == identifier }) else {
             return
@@ -304,6 +316,12 @@ final class WindowSwitcherService: ObservableObject {
                 return nil
             case 124, 125:
                 self.moveSelection(delta: 1)
+                return nil
+            case 46:
+                self.minimizeSelectedWindow()
+                return nil
+            case 13:
+                self.closeSelectedWindow()
                 return nil
             default:
                 return event
