@@ -157,7 +157,7 @@ final class LaunchpadOverlayService: ObservableObject {
     }
 
     func present() {
-        guard ProductService.shared.isUnlocked(.launchpad), DockyPreferences.shared.enablesLaunchpadOverlay else {
+        guard DockyPreferences.shared.enablesLaunchpadOverlay else {
             dismiss()
             return
         }

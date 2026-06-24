@@ -166,13 +166,6 @@ struct CalendarWidgetTileView: View {
                     .lineLimit(2)
 
                 scheduleRow(for: event, layout: layout, now: now, opacity: 0.84)
-
-//                if shouldShowLocation(for: event) {
-//                    Text(event.location)
-//                        .font(.system(size: layout.detailFontSize))
-//                        .foregroundStyle(Color.primary.opacity(0.66))
-//                        .lineLimit(1)
-//                }
             }
 
             Spacer(minLength: 0)

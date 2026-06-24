@@ -6,7 +6,6 @@
 import SwiftUI
 
 private enum SettingsPane: String, CaseIterable, Identifiable {
-    case docky
     case profiles
     case appearanceGeneral
     case appearanceIndicators
@@ -38,7 +37,6 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .docky: "Docky"
         case .profiles: "Profiles"
         case .appearanceGeneral: "General"
         case .appearanceIndicators: "Indicators"
@@ -70,7 +68,6 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
 
     var symbolName: String {
         switch self {
-        case .docky: "shippingbox"
         case .profiles: "person.crop.rectangle.stack"
         case .appearanceGeneral: "slider.horizontal.3"
         case .appearanceIndicators: "circle.bottomhalf.filled"
@@ -102,7 +99,6 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
 
     var tileColor: Color {
         switch self {
-        case .docky: .purple
         case .profiles: .indigo
         case .appearanceGeneral: .teal
         case .appearanceIndicators: .green
@@ -132,14 +128,6 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         }
     }
 
-    var isPro: Bool {
-        switch self {
-        case .launchpad, .windowManagement, .appIcons, .actions, .externalWidgets:
-            true
-        default:
-            false
-        }
-    }
 }
 
 private struct SettingsSection: Identifiable {
@@ -149,7 +137,6 @@ private struct SettingsSection: Identifiable {
 }
 
 private let settingsSections: [SettingsSection] = [
-    SettingsSection(id: "product", title: "Product", panes: [.docky]),
     SettingsSection(id: "profiles", title: "Profiles", panes: [.profiles]),
     SettingsSection(id: "appearance", title: "Appearance", panes: [
         .appearanceThemes,
@@ -210,8 +197,8 @@ final class SettingsNavigator {
 }
 
 struct SettingsRootView: View {
-    @State private var selection: SettingsPane = .docky
-    @State private var history: [SettingsPane] = [.docky]
+    @State private var selection: SettingsPane = .profiles
+    @State private var history: [SettingsPane] = [.profiles]
     @State private var historyIndex: Int = 0
     // Suppresses history pushes when the selection change originated from
     // a back/forward button rather than a fresh user navigation.
@@ -312,9 +299,6 @@ struct SettingsRootView: View {
                 PaneIconBadge(symbol: pane.symbolName, color: pane.tileColor)
                 Text(pane.title)
                 Spacer(minLength: 8)
-                if pane.isPro {
-                    ProBadge()
-                }
             }
             .tag(pane)
         }
@@ -358,8 +342,6 @@ private struct SettingsDetailView: View {
     @ViewBuilder
     private var selectedView: some View {
         switch pane {
-        case .docky:
-            ProductSettingsView()
         case .profiles:
             ProfilesSettingsView()
         case .appearanceGeneral:

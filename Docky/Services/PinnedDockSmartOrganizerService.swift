@@ -134,9 +134,6 @@ final class PinnedDockSmartOrganizerService {
 
     private func availableWidgets() -> [AvailableWidget] {
         WidgetCatalog.paletteRegistrations
-            .filter {
-                ProductService.shared.availability(for: $0.kind.productFeature, context: .newPlacement).allowsNewPlacement
-            }
             .map { registration in
                 AvailableWidget(
                 kind: registration.kind,
@@ -171,11 +168,6 @@ final class PinnedDockSmartOrganizerService {
             let widgetList = availableWidgets.map {
                 "- \($0.title) [kind=\($0.kind.rawValue), owner=\($0.ownerBundleIdentifier), defaultSpan=\($0.defaultSpan.rawValue)]"
             }.joined(separator: "\n")
-            let hasLaunchpad = existingItems.contains { $0.kind == .launchpad }
-            let canUseLaunchpad = ProductService.shared.availability(for: .launchpad, context: .newPlacement).allowsNewPlacement || hasLaunchpad
-            let canUseFolders = ProductService.shared.isUnlocked(.groupedAppFolders)
-            let canUseSmartStack = ProductService.shared.availability(for: .smartStack, context: .newPlacement).allowsNewPlacement
-
             let prompt = """
             Organize these pinned macOS apps into a new Docky pinned layout.
 
@@ -186,9 +178,9 @@ final class PinnedDockSmartOrganizerService {
             \(widgetList.isEmpty ? "- None" : widgetList)
 
             Constraints:
-            - Folders allowed: \(canUseFolders ? "yes" : "no")
-            - Launchpad allowed: \(canUseLaunchpad ? "yes" : "no")
-            - Smart Stack allowed: \(canUseSmartStack ? "yes" : "no")
+            - Folders allowed: yes
+            - Launchpad allowed: yes
+            - Smart Stack allowed: yes
             - Every app must appear exactly once, either directly or inside one folder.
             - Folder titles should be short and natural.
             - Do not create empty or one-app folders.
@@ -271,8 +263,7 @@ final class PinnedDockSmartOrganizerService {
         let groupedApps = groupedAppsByHeuristic(apps)
         var result: [SuggestedItem] = []
 
-        if existingItems.contains(where: { $0.kind == .launchpad }),
-           ProductService.shared.availability(for: .launchpad, context: .newPlacement).allowsNewPlacement {
+        if existingItems.contains(where: { $0.kind == .launchpad }) {
             result.append(.launchpad)
             result.append(.divider)
         }
@@ -282,8 +273,7 @@ final class PinnedDockSmartOrganizerService {
                 continue
             }
 
-            if group.bundleIdentifiers.count >= 3,
-               ProductService.shared.isUnlocked(.groupedAppFolders) {
+            if group.bundleIdentifiers.count >= 3 {
                 result.append(.folder(title: group.title, bundleIdentifiers: group.bundleIdentifiers))
             } else {
                 result.append(contentsOf: group.bundleIdentifiers.map(SuggestedItem.app))
@@ -370,9 +360,6 @@ final class PinnedDockSmartOrganizerService {
             (widgetKey(kind: $0.kind, ownerBundleIdentifier: $0.ownerBundleIdentifier), $0)
         })
         let hasLaunchpad = existingItems.contains { $0.kind == .launchpad }
-        let canUseLaunchpad = ProductService.shared.availability(for: .launchpad, context: .newPlacement).allowsNewPlacement || hasLaunchpad
-        let canUseFolders = ProductService.shared.isUnlocked(.groupedAppFolders)
-        let canUseSmartStack = ProductService.shared.availability(for: .smartStack, context: .newPlacement).allowsNewPlacement
 
         var remainingBundleIdentifiers = Set(availableBundleIdentifiers)
         var hasLaunchpadItem = false
@@ -388,13 +375,6 @@ final class PinnedDockSmartOrganizerService {
                 }
                 result.append(.app(bundleIdentifier: bundleIdentifier))
             case .folder(let title, let bundleIdentifiers):
-                guard canUseFolders else {
-                    for bundleIdentifier in bundleIdentifiers where remainingBundleIdentifiers.remove(bundleIdentifier) != nil {
-                        result.append(.app(bundleIdentifier: bundleIdentifier))
-                    }
-                    continue
-                }
-
                 let uniqueBundleIdentifiers = bundleIdentifiers.filter { remainingBundleIdentifiers.contains($0) }
                 guard uniqueBundleIdentifiers.count >= 2 else {
                     for bundleIdentifier in uniqueBundleIdentifiers where remainingBundleIdentifiers.remove(bundleIdentifier) != nil {
@@ -428,13 +408,13 @@ final class PinnedDockSmartOrganizerService {
                 let resolvedSpan = kind.supportedSpans.contains(span) ? span : widget.defaultSpan
                 result.append(.widget(kind: kind, ownerBundleIdentifier: ownerBundleIdentifier, span: resolvedSpan))
             case .smartStack:
-                guard canUseSmartStack, !hasSmartStackItem else {
+                guard !hasSmartStackItem else {
                     continue
                 }
                 hasSmartStackItem = true
                 result.append(.smartStack())
             case .launchpad:
-                guard canUseLaunchpad, !hasLaunchpadItem else {
+                guard !hasLaunchpadItem else {
                     continue
                 }
                 hasLaunchpadItem = true
@@ -446,7 +426,7 @@ final class PinnedDockSmartOrganizerService {
             result.append(.app(bundleIdentifier: bundleIdentifier))
         }
 
-        if hasLaunchpad, !hasLaunchpadItem, canUseLaunchpad {
+        if hasLaunchpad, !hasLaunchpadItem {
             result.insert(.launchpad(), at: 0)
         }
 

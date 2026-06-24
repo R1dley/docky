@@ -15,8 +15,6 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct WidgetsSettingsView: View {
-    @ObservedObject private var product = ProductService.shared
-
     @State private var entries: [WidgetEntry] = []
     @State private var marketplaceState: MarketplaceState = .loading
     @State private var hasPendingChanges = false
@@ -26,13 +24,7 @@ struct WidgetsSettingsView: View {
 
     var body: some View {
         Form {
-            if product.isUnlocked(.externalWidgets) {
-                unlockedContent
-            } else {
-                Section {
-                    ProFeatureNotice(feature: .externalWidgets)
-                }
-            }
+            unlockedContent
         }
         .formStyle(.grouped)
         .navigationTitle("Widget Store")

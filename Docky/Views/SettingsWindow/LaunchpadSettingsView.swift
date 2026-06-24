@@ -15,21 +15,15 @@ struct LaunchpadSettingsView: View {
     var hidesAvailabilitySection: Bool = false
 
     @Bindable private var preferences = DockyPreferences.shared
-    @ObservedObject private var product = ProductService.shared
     @State private var isRecordingShortcut = false
 
     var body: some View {
         Form {
             if !hidesAvailabilitySection {
                 Section("Availability") {
-                    if !product.isUnlocked(.launchpad) {
-                        ProFeatureNotice(feature: .launchpad)
-                    }
-
                     VStack(alignment: .leading, spacing: 8) {
                         Toggle("Enable Launchpad", isOn: $preferences.enablesLaunchpadOverlay)
                             .font(.headline)
-                            .disabled(!product.isUnlocked(.launchpad))
 
                         Text("Turn Docky's Launchpad overlay on or off without removing its shortcut or layout preferences.")
                             .foregroundStyle(.secondary)
@@ -60,7 +54,7 @@ struct LaunchpadSettingsView: View {
                         ) { shortcut in
                             preferences.launchpadShortcut = shortcut
                         }
-                        .disabled(!product.isUnlocked(.launchpad) || !preferences.enablesLaunchpadOverlay)
+                        .disabled(!preferences.enablesLaunchpadOverlay)
                     }
 
                     Text("Leave this unset if you only want to open Launchpad from the Docky tile or context menu.")
@@ -86,7 +80,7 @@ struct LaunchpadSettingsView: View {
                         .labelsHidden()
                         .pickerStyle(.segmented)
                         .fixedSize()
-                        .disabled(!product.isUnlocked(.launchpad) || !preferences.enablesLaunchpadOverlay)
+                        .disabled(!preferences.enablesLaunchpadOverlay)
                     }
 
                     Text(preferences.launchpadLayoutAxis.summary)
@@ -103,7 +97,7 @@ struct LaunchpadSettingsView: View {
 
                         Stepper("\(preferences.launchpadGridColumnCount)", value: $preferences.launchpadGridColumnCount, in: 1...12)
                             .foregroundStyle(.secondary)
-                            .disabled(!product.isUnlocked(.launchpad) || !preferences.enablesLaunchpadOverlay)
+                            .disabled(!preferences.enablesLaunchpadOverlay)
                     }
 
                     HStack {
@@ -116,8 +110,7 @@ struct LaunchpadSettingsView: View {
                             .foregroundStyle(.secondary)
                             // Rows are only consulted in paged mode;
                             // vertical mode grows as long as needed.
-                            .disabled(!product.isUnlocked(.launchpad)
-                                      || !preferences.enablesLaunchpadOverlay
+                            .disabled(!preferences.enablesLaunchpadOverlay
                                       || preferences.launchpadLayoutAxis == .vertical)
                     }
 
@@ -143,7 +136,7 @@ struct LaunchpadSettingsView: View {
                         in: 48...192,
                         step: 1
                     )
-                    .disabled(!product.isUnlocked(.launchpad) || !preferences.enablesLaunchpadOverlay)
+                    .disabled(!preferences.enablesLaunchpadOverlay)
 
                     Text("Maximum icon edge on a 1440p screen. Smaller displays scale down from this value; larger ones are clamped to it. Default is 128 pt.")
                         .foregroundStyle(.secondary)
@@ -167,7 +160,7 @@ struct LaunchpadSettingsView: View {
                         in: 0...96,
                         step: 1
                     )
-                    .disabled(!product.isUnlocked(.launchpad) || !preferences.enablesLaunchpadOverlay)
+                    .disabled(!preferences.enablesLaunchpadOverlay)
 
                     Text("Horizontal gap between icons at the reference height. Lower values pack icons tighter, higher values spread them out.")
                         .foregroundStyle(.secondary)
@@ -190,7 +183,7 @@ struct LaunchpadSettingsView: View {
                     }
 
                     Slider(value: launchpadTransparencyBinding, in: 0...1, step: 0.01)
-                        .disabled(!product.isUnlocked(.launchpad) || !preferences.enablesLaunchpadOverlay)
+                        .disabled(!preferences.enablesLaunchpadOverlay)
 
                     Text("Adjusts how transparent the Launchpad backdrop is. Lower values darken the screen behind the grid; higher values let more of your desktop show through.")
                         .foregroundStyle(.secondary)
@@ -206,7 +199,7 @@ struct LaunchpadSettingsView: View {
                         Button("Choose Image…") {
                             chooseBackgroundImage()
                         }
-                        .disabled(!product.isUnlocked(.launchpad) || !preferences.enablesLaunchpadOverlay)
+                        .disabled(!preferences.enablesLaunchpadOverlay)
 
                         if preferences.launchpadBackgroundImagePath != nil {
                             Button("Use Desktop Wallpaper") {
@@ -225,7 +218,7 @@ struct LaunchpadSettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     Toggle("Blur Background Image", isOn: $preferences.launchpadBackgroundBlursImage)
-                        .disabled(!product.isUnlocked(.launchpad) || !preferences.enablesLaunchpadOverlay)
+                        .disabled(!preferences.enablesLaunchpadOverlay)
 
                     Text("Turn off to render the chosen image crisp. Default is on to soften the desktop wallpaper into a neutral backdrop.")
                         .foregroundStyle(.secondary)

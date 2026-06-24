@@ -7,7 +7,6 @@ import SwiftUI
 
 struct ActionCatalogSettingsView: View {
     @ObservedObject private var catalog = MenuCatalogService.shared
-    @ObservedObject private var product = ProductService.shared
 
     var body: some View {
         Form {
@@ -19,12 +18,6 @@ struct ActionCatalogSettingsView: View {
                 Text("Action kinds Docky will execute: built-in commands, AppleScript, and macOS menu-bar clicks. The first time an app-targeted AppleScript or menu-click action runs, macOS may prompt for Automation permission.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if !product.isUnlocked(.scriptedActions) {
-                Section {
-                    ProFeatureNotice(feature: .scriptedActions)
-                }
             }
 
             Section("Catalog Packages") {
@@ -70,7 +63,6 @@ struct ActionCatalogSettingsView: View {
                     Button("Reload Catalog") {
                         catalog.reload()
                     }
-                    .disabled(!product.isUnlocked(.scriptedActions))
                 }
             }
 

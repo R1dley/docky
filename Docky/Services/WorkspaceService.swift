@@ -159,11 +159,7 @@ final class WorkspaceService: ObservableObject {
         runningApp: NSRunningApplication,
         visibleWindows: [AppWindow]
     ) {
-        let preference = DockyPreferences.shared.appTileFrontmostClickBehavior
-        let resolved: AppTileFrontmostClickBehavior = {
-            guard preference.requiresPro else { return preference }
-            return ProductService.shared.currentTier == .pro ? preference : .none
-        }()
+        let resolved = DockyPreferences.shared.appTileFrontmostClickBehavior
 
         switch resolved {
         case .none:
@@ -289,12 +285,9 @@ final class WorkspaceService: ObservableObject {
     /// switcher and hover popover show current content the next time they
     /// open, instead of a stale cached frame. The window is on screen and
     /// frontmost at this point, so this is the best chance for an accurate
-    /// capture. Overwrites any cached preview unconditionally. Gated on the
-    /// same Pro entitlement as the periodic producer so free users never
-    /// enter the capture path.
+    /// capture. Overwrites any cached preview unconditionally.
     private func refreshPreviewAfterFocus(for window: AppWindow) {
-        guard ProductService.shared.isUnlocked(.windowSwitcher),
-              PermissionsService.shared.screenCapture == .granted else {
+        guard PermissionsService.shared.screenCapture == .granted else {
             return
         }
 
@@ -724,8 +717,7 @@ final class WorkspaceService: ObservableObject {
     /// invalidations (resize, focus-out) which know more than the TTL
     /// does about when a cached image stopped being representative.
     private func invalidateAppWindowPreview(windowIdentifier: String) {
-        guard ProductService.shared.isUnlocked(.windowSwitcher),
-              PermissionsService.shared.screenCapture == .granted else {
+        guard PermissionsService.shared.screenCapture == .granted else {
             return
         }
         var didChange = false
@@ -835,15 +827,10 @@ final class WorkspaceService: ObservableObject {
     }
 
     private func refreshAppWindowPreviews(for windows: [AppWindow]) {
-        // App-window preview thumbnails are only consumed by Pro
-        // features (`WindowSwitcherService`, `WindowPreviewService`),
-        // both of which already gate reads on
-        // `ProductService.isUnlocked(.windowSwitcher)`. Skipping the
-        // capture on the producer side keeps free users out of the
-        // screen-capture path entirely — saving CPU/GPU and avoiding
-        // private-API code paths they can't even surface.
-        guard ProductService.shared.isUnlocked(.windowSwitcher),
-              PermissionsService.shared.screenCapture == .granted else {
+        // Skip the capture path entirely without screen-recording
+        // permission, saving CPU/GPU and avoiding private-API code
+        // paths that would have nothing to render into.
+        guard PermissionsService.shared.screenCapture == .granted else {
             if !appWindowPreviews.isEmpty {
                 appWindowPreviews = [:]
             }

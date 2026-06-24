@@ -46,13 +46,6 @@ final class WindowPreviewService: ObservableObject {
     /// every app inside the folder in a single preview popover.
     @discardableResult
     func present(forBundleIdentifiers bundleIDs: [String], sourceTileID: String) -> Bool {
-        // Per-tile preview is part of the `.windowSwitcher` Pro feature, paired
-        // with the global Cmd-Tab-style switcher. Free users still see the
-        // tooltip; the popover just never opens.
-        guard ProductService.shared.isUnlocked(.windowSwitcher) else {
-            dismiss()
-            return false
-        }
 
         if presentedSourceTileID == sourceTileID, !windows.isEmpty {
             return true

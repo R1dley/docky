@@ -256,9 +256,6 @@ private struct WindowPreviewsDebugView: View {
             // captured it yet (e.g. minimized before Docky launched).
             return "Minimized — not yet captured"
         }
-        if !ProductService.shared.isUnlocked(.windowSwitcher) {
-            return "App-window previews gated by Pro (.windowSwitcher)"
-        }
         // Window must be in the visible filter (non-minimized AND
         // large enough) to enter `refreshAppWindowPreviews`.
         if let frame = window.frame {
@@ -362,7 +359,6 @@ private struct WindowPreviewsDebugView: View {
         }
 
         lines.append("Permissions:   screen=\(PermissionsService.shared.screenCapture)")
-        lines.append("Pro:           windowSwitcher=\(ProductService.shared.isUnlocked(.windowSwitcher))")
 
         return lines.joined(separator: "\n")
     }

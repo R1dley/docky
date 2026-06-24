@@ -601,12 +601,6 @@ enum AppTileFrontmostClickBehavior: String, CaseIterable, Identifiable {
         }
     }
 
-    var requiresPro: Bool {
-        switch self {
-        case .none, .hide: false
-        case .cycleWindows, .minimizeAll: true
-        }
-    }
 }
 
 enum DockTileIndicatorShape: String, CaseIterable, Identifiable {
@@ -3202,10 +3196,6 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
     }
 
     func appIconOverride(forBundleIdentifier bundleIdentifier: String) -> AppIconOverride? {
-        guard ProductService.shared.isUnlocked(.customAppIcons) else {
-            return nil
-        }
-
         return appIconOverrides.first { $0.bundleIdentifier == bundleIdentifier }
     }
 
@@ -3214,17 +3204,11 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
             return userURL
         }
         // Theme-supplied icons are convention-based: `assets/<bundle-id>.png`
-        // inside the active theme bundle. Not gated by the Pro
-        // `customAppIcons` flag, consistent with how other
-        // theme-supplied appearance values flow through unconditionally.
+        // inside the active theme bundle.
         return ThemeManager.shared.activeAppIconURL(forBundleIdentifier: bundleIdentifier)
     }
 
     func setAppIconOverride(bundleIdentifier: String, iconPath: String, paddingFraction: CGFloat? = nil) {
-        guard ProductService.shared.isUnlocked(.customAppIcons) else {
-            return
-        }
-
         guard !bundleIdentifier.isEmpty, !iconPath.isEmpty else {
             return
         }
@@ -3266,10 +3250,6 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
     }
 
     func trashIconOverride(forState state: TrashIconState) -> TrashIconOverride? {
-        guard ProductService.shared.isUnlocked(.customAppIcons) else {
-            return nil
-        }
-
         return trashIconOverrides.first { $0.state == state }
     }
 
@@ -3278,10 +3258,6 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
     }
 
     func setTrashIconOverride(state: TrashIconState, iconPath: String, paddingFraction: CGFloat? = nil) {
-        guard ProductService.shared.isUnlocked(.customAppIcons) else {
-            return
-        }
-
         guard !iconPath.isEmpty else {
             return
         }
@@ -3317,10 +3293,6 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
     }
 
     func folderIconOverride(forPath path: String) -> FolderIconOverride? {
-        guard ProductService.shared.isUnlocked(.customAppIcons) else {
-            return nil
-        }
-
         return folderIconOverrides.first { $0.folderPath == path }
     }
 
@@ -3329,10 +3301,6 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
     }
 
     func setFolderIconOverride(folderPath: String, iconPath: String, paddingFraction: CGFloat? = nil) {
-        guard ProductService.shared.isUnlocked(.customAppIcons) else {
-            return
-        }
-
         guard !folderPath.isEmpty, !iconPath.isEmpty else {
             return
         }
@@ -3371,9 +3339,6 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
     }
 
     var effectiveLaunchpadIconOverrideURL: URL? {
-        guard ProductService.shared.isUnlocked(.customAppIcons) else {
-            return nil
-        }
         guard let path = launchpadIconPath, !path.isEmpty else {
             return nil
         }
@@ -3391,9 +3356,6 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
     }
 
     var effectiveStartMenuIconOverrideURL: URL? {
-        guard ProductService.shared.isUnlocked(.customAppIcons) else {
-            return nil
-        }
         guard let path = startMenuIconPath, !path.isEmpty else {
             return nil
         }

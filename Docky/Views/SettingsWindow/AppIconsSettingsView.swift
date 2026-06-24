@@ -9,7 +9,6 @@ import UniformTypeIdentifiers
 
 struct AppIconsSettingsView: View {
     @Bindable private var preferences = DockyPreferences.shared
-    @ObservedObject private var product = ProductService.shared
     @ObservedObject private var workspace = WorkspaceService.shared
     @State private var otherApps: [AppIconSettingsEntry] = []
     @State private var otherAppsLoaded = false
@@ -62,10 +61,6 @@ struct AppIconsSettingsView: View {
             }
 
             Section("Overrides") {
-                if !product.isUnlocked(.customAppIcons) {
-                    ProFeatureNotice(feature: .customAppIcons)
-                }
-
                 Text("Choose a custom image for any app Docky currently knows about. Custom app icons follow Docky's circle tile clipping when circle tiles are enabled.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -211,7 +206,6 @@ private struct AppIconOverrideRow: View {
     let entry: AppIconSettingsEntry
 
     @Bindable private var preferences = DockyPreferences.shared
-    @ObservedObject private var product = ProductService.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -243,7 +237,6 @@ private struct AppIconOverrideRow: View {
                     Button("Choose Image...") {
                         chooseOverrideImage()
                     }
-                    .disabled(!product.isUnlocked(.customAppIcons))
 
                     if let themeIconURL {
                         Button("Use Theme Icon") {
@@ -252,7 +245,6 @@ private struct AppIconOverrideRow: View {
                                 iconPath: themeIconURL.path
                             )
                         }
-                        .disabled(!product.isUnlocked(.customAppIcons))
                         .help("Pin the active theme's icon for this app as your override. Without this, the theme icon already applies; pinning it preserves the choice if you switch themes.")
                     }
 
@@ -260,7 +252,6 @@ private struct AppIconOverrideRow: View {
                         Button("Clear") {
                             preferences.removeAppIconOverride(bundleIdentifier: entry.bundleIdentifier)
                         }
-                        .disabled(!product.isUnlocked(.customAppIcons))
                     }
                 }
             }
@@ -289,7 +280,6 @@ private struct AppIconOverrideRow: View {
 
             Slider(value: paddingFractionBinding, in: 0...0.5, step: 0.01)
                 .controlSize(.small)
-                .disabled(!product.isUnlocked(.customAppIcons))
 
             Text("\(Int((overrideEntry?.paddingFraction ?? 0) * 100))%")
                 .font(.caption)
@@ -441,7 +431,6 @@ private struct TrashIconOverrideRow: View {
     let state: TrashIconState
 
     @Bindable private var preferences = DockyPreferences.shared
-    @ObservedObject private var product = ProductService.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -474,13 +463,11 @@ private struct TrashIconOverrideRow: View {
                     Button("Choose Image...") {
                         chooseOverrideImage()
                     }
-                    .disabled(!product.isUnlocked(.customAppIcons))
 
                     if overrideEntry != nil {
                         Button("Clear") {
                             preferences.removeTrashIconOverride(state: state)
                         }
-                        .disabled(!product.isUnlocked(.customAppIcons))
                     }
                 }
             }
@@ -499,7 +486,6 @@ private struct TrashIconOverrideRow: View {
 
             Slider(value: paddingFractionBinding, in: 0...0.5, step: 0.01)
                 .controlSize(.small)
-                .disabled(!product.isUnlocked(.customAppIcons))
 
             Text("\(Int((overrideEntry?.paddingFraction ?? 0) * 100))%")
                 .font(.caption)
@@ -568,7 +554,6 @@ private struct FolderIconOverrideRow: View {
     let entry: FolderIconSettingsEntry
 
     @Bindable private var preferences = DockyPreferences.shared
-    @ObservedObject private var product = ProductService.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -601,13 +586,11 @@ private struct FolderIconOverrideRow: View {
                     Button("Choose Image...") {
                         chooseOverrideImage()
                     }
-                    .disabled(!product.isUnlocked(.customAppIcons))
 
                     if overrideEntry != nil {
                         Button("Clear") {
                             preferences.removeFolderIconOverride(folderPath: entry.folderPath)
                         }
-                        .disabled(!product.isUnlocked(.customAppIcons))
                     }
                 }
             }
@@ -626,7 +609,6 @@ private struct FolderIconOverrideRow: View {
 
             Slider(value: paddingFractionBinding, in: 0...0.5, step: 0.01)
                 .controlSize(.small)
-                .disabled(!product.isUnlocked(.customAppIcons))
 
             Text("\(Int((overrideEntry?.paddingFraction ?? 0) * 100))%")
                 .font(.caption)
@@ -685,7 +667,6 @@ private struct FolderIconOverrideRow: View {
 
 private struct LaunchpadIconOverrideRow: View {
     @Bindable private var preferences = DockyPreferences.shared
-    @ObservedObject private var product = ProductService.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -716,14 +697,12 @@ private struct LaunchpadIconOverrideRow: View {
                     Button("Choose Image...") {
                         chooseOverrideImage()
                     }
-                    .disabled(!product.isUnlocked(.customAppIcons))
 
                     if hasOverride {
                         Button("Clear") {
                             preferences.launchpadIconPath = nil
                             preferences.launchpadIconPaddingFraction = nil
                         }
-                        .disabled(!product.isUnlocked(.customAppIcons))
                     }
                 }
             }
@@ -742,7 +721,6 @@ private struct LaunchpadIconOverrideRow: View {
 
             Slider(value: paddingFractionBinding, in: 0...0.5, step: 0.01)
                 .controlSize(.small)
-                .disabled(!product.isUnlocked(.customAppIcons))
 
             Text("\(Int((preferences.launchpadIconPaddingFraction ?? 0) * 100))%")
                 .font(.caption)
@@ -797,7 +775,6 @@ private struct LaunchpadIconOverrideRow: View {
 
 private struct StartMenuIconOverrideRow: View {
     @Bindable private var preferences = DockyPreferences.shared
-    @ObservedObject private var product = ProductService.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -828,14 +805,12 @@ private struct StartMenuIconOverrideRow: View {
                     Button("Choose Image...") {
                         chooseOverrideImage()
                     }
-                    .disabled(!product.isUnlocked(.customAppIcons))
 
                     if hasOverride {
                         Button("Clear") {
                             preferences.startMenuIconPath = nil
                             preferences.startMenuIconPaddingFraction = nil
                         }
-                        .disabled(!product.isUnlocked(.customAppIcons))
                     }
                 }
             }
@@ -854,7 +829,6 @@ private struct StartMenuIconOverrideRow: View {
 
             Slider(value: paddingFractionBinding, in: 0...0.5, step: 0.01)
                 .controlSize(.small)
-                .disabled(!product.isUnlocked(.customAppIcons))
 
             Text("\(Int((preferences.startMenuIconPaddingFraction ?? 0) * 100))%")
                 .font(.caption)

@@ -72,10 +72,6 @@ final class ExternalWidgetLoader {
         let directory = widgetsDirectory
         ensureDirectoryExists(directory)
 
-        guard ProductService.shared.isUnlocked(.externalWidgets) else {
-            log.info("Skipping external widget discovery: requires Pro tier")
-            return
-        }
 
         let urls = installedBundleURLs()
         log.info("Scanning \(directory.path, privacy: .public) found \(urls.count) bundle(s)")

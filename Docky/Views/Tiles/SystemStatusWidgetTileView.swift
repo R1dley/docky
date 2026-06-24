@@ -91,11 +91,6 @@ struct SystemStatusWidgetTileView: View {
                     .font(.system(size: layout.valueFontSize, weight: .bold, design: .rounded))
                     .foregroundStyle(Color.primary.opacity(0.98))
                     .lineLimit(1)
-
-//                Text(metric.secondaryText)
-//                    .font(.system(size: layout.captionFontSize, weight: .semibold))
-//                    .foregroundStyle(Color.primary.opacity(0.68))
-//                    .lineLimit(1)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)

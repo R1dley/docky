@@ -7,7 +7,6 @@ import SwiftUI
 
 struct WindowManagementSettingsView: View {
     @Bindable private var preferences = DockyPreferences.shared
-    @ObservedObject private var product = ProductService.shared
     @ObservedObject private var permissions = PermissionsService.shared
     @State private var isRecordingShortcut = false
     @State private var isRecordingMinimizeKey = false
@@ -26,8 +25,7 @@ struct WindowManagementSettingsView: View {
     }
 
     private var shortcutHelpText: String {
-        if product.isUnlocked(.windowSwitcher),
-           preferences.showsWindowSwitcherFocusPreview,
+        if preferences.showsWindowSwitcherFocusPreview,
            preferences.windowSwitcherPreviewMode == .instantFocus,
            previewControlsApply {
             return "While the switcher is open, keep the shortcut modifiers held and tap the shortcut again to cycle. In Instant Focus mode, each step immediately focuses the next window and releasing the modifiers ends cycling."
@@ -39,14 +37,9 @@ struct WindowManagementSettingsView: View {
     var body: some View {
         Form {
             Section("Window Switcher") {
-                if !product.isUnlocked(.windowSwitcher) {
-                    ProFeatureNotice(feature: .windowSwitcher)
-                }
-
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Enable Window Switcher", isOn: $preferences.enablesWindowSwitcher)
                         .font(.headline)
-                        .disabled(!product.isUnlocked(.windowSwitcher))
 
                     Text("Turn Docky's Cmd-Tab-style switcher on or off without clearing its shortcut or preview preference.")
                         .foregroundStyle(.secondary)
@@ -74,7 +67,7 @@ struct WindowManagementSettingsView: View {
                         ) { shortcut in
                             preferences.windowSwitcherShortcut = shortcut
                         }
-                        .disabled(!product.isUnlocked(.windowSwitcher) || !preferences.enablesWindowSwitcher)
+                        .disabled(!preferences.enablesWindowSwitcher)
                     }
 
                     Text(shortcutHelpText)
@@ -94,7 +87,7 @@ struct WindowManagementSettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    .disabled(!product.isUnlocked(.windowSwitcher) || !preferences.enablesWindowSwitcher)
+                    .disabled(!preferences.enablesWindowSwitcher)
 
                     Text(preferences.windowSwitcherLayout.summary)
                         .foregroundStyle(.secondary)
@@ -112,7 +105,7 @@ struct WindowManagementSettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Enable Switcher Preview", isOn: $preferences.showsWindowSwitcherFocusPreview)
                         .font(.headline)
-                        .disabled(!product.isUnlocked(.windowSwitcher) || !preferences.enablesWindowSwitcher || !previewControlsApply)
+                        .disabled(!preferences.enablesWindowSwitcher || !previewControlsApply)
 
                     Text(previewControlsApply
                          ? "Choose whether the switcher should stay purely overlaid, preview the selected window behind it, or focus each step immediately while cycling."
@@ -134,7 +127,7 @@ struct WindowManagementSettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    .disabled(!product.isUnlocked(.windowSwitcher) || !preferences.enablesWindowSwitcher || !preferences.showsWindowSwitcherFocusPreview || !previewControlsApply)
+                    .disabled(!preferences.enablesWindowSwitcher || !preferences.showsWindowSwitcherFocusPreview || !previewControlsApply)
 
                     Text(preferences.windowSwitcherPreviewMode.summary)
                         .foregroundStyle(.secondary)
@@ -173,14 +166,10 @@ struct WindowManagementSettingsView: View {
                     ) { preferences.switcherZoomKeyCode = $0 }
                 }
                 .padding(.vertical, 4)
-                .disabled(!product.isUnlocked(.windowSwitcher) || !preferences.enablesWindowSwitcher)
+                .disabled(!preferences.enablesWindowSwitcher)
             }
 
             Section("Window Preview") {
-                if !product.isUnlocked(.windowSwitcher) {
-                    ProFeatureNotice(feature: .windowSwitcher)
-                }
-
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Hover Delay")
@@ -200,7 +189,6 @@ struct WindowManagementSettingsView: View {
                                 .monospacedDigit()
                         }
                     }
-                    .disabled(!product.isUnlocked(.windowSwitcher))
 
                     Text("How long to wait before the per-tile window preview appears when hovering an app or app folder.")
                         .foregroundStyle(.secondary)
@@ -219,7 +207,6 @@ struct WindowManagementSettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    .disabled(!product.isUnlocked(.windowSwitcher))
 
                     Text(preferences.windowPreviewLayout.summary)
                         .foregroundStyle(.secondary)

@@ -44,8 +44,7 @@ final class WindowSwitcherService: ObservableObject {
         // captured image to show behind the switcher, and instant-focus's
         // "see the real window come forward" UX fights with the list overlay.
         // In list mode the list itself is the preview substitute.
-        guard ProductService.shared.isUnlocked(.windowSwitcher),
-              DockyPreferences.shared.showsWindowSwitcherFocusPreview,
+        guard DockyPreferences.shared.showsWindowSwitcherFocusPreview,
               resolvedLayout == .thumbnails else {
             return nil
         }
@@ -88,8 +87,7 @@ final class WindowSwitcherService: ObservableObject {
     }
 
     func handleHotKeyPress(direction: Int) {
-        guard ProductService.shared.isUnlocked(.windowSwitcher),
-              DockyPreferences.shared.enablesWindowSwitcher else {
+        guard DockyPreferences.shared.enablesWindowSwitcher else {
             dismiss()
             return
         }
@@ -293,19 +291,6 @@ final class WindowSwitcherService: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.updateGlobalEventMonitors()
-            }
-            .store(in: &cancellables)
-
-        ProductService.shared.$currentTier
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
-
-                self.registerHotKey(shortcut: DockyPreferences.shared.windowSwitcherShortcut)
-                if !ProductService.shared.isUnlocked(.windowSwitcher) {
-                    self.dismiss()
-                    WindowPreviewWindowController.shared.dismissCurrent()
-                }
             }
             .store(in: &cancellables)
     }
@@ -614,8 +599,7 @@ final class WindowSwitcherService: ObservableObject {
     private func registerHotKey(shortcut: KeyboardShortcut) {
         unregisterHotKey()
 
-        guard ProductService.shared.isUnlocked(.windowSwitcher),
-              DockyPreferences.shared.enablesWindowSwitcher,
+        guard DockyPreferences.shared.enablesWindowSwitcher,
               shortcut.isValid else {
             return
         }

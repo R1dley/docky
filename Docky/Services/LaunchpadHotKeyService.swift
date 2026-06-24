@@ -45,18 +45,6 @@ final class LaunchpadHotKeyService {
             }
         }
         .store(in: &cancellables)
-
-        ProductService.shared.$currentTier
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
-
-                self.registerHotKey(shortcut: DockyPreferences.shared.launchpadShortcut)
-                if !ProductService.shared.isUnlocked(.launchpad) {
-                    LaunchpadOverlayService.shared.dismiss()
-                }
-            }
-            .store(in: &cancellables)
     }
 
     private func installHotKeyHandlerIfNeeded() {
@@ -85,7 +73,7 @@ final class LaunchpadHotKeyService {
             }
 
             Task { @MainActor in
-                guard ProductService.shared.isUnlocked(.launchpad), DockyPreferences.shared.enablesLaunchpadOverlay else {
+                guard DockyPreferences.shared.enablesLaunchpadOverlay else {
                     return
                 }
                 LaunchpadOverlayService.shared.toggle()
@@ -106,7 +94,7 @@ final class LaunchpadHotKeyService {
     private func registerHotKey(shortcut: KeyboardShortcut) {
         unregisterHotKey()
 
-        guard ProductService.shared.isUnlocked(.launchpad), DockyPreferences.shared.enablesLaunchpadOverlay, shortcut.isValid else {
+        guard DockyPreferences.shared.enablesLaunchpadOverlay, shortcut.isValid else {
             return
         }
 

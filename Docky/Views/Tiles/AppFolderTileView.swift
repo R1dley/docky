@@ -15,7 +15,6 @@ struct AppFolderTileView: View {
     private let dockSettings = DockSettingsService.shared
     @ObservedObject private var layout = DockLayoutService.shared
     @Bindable private var preferences = DockyPreferences.shared
-    @ObservedObject private var product = ProductService.shared
     @ObservedObject private var store = TileStore.shared
     @ObservedObject private var workspace = WorkspaceService.shared
 
@@ -29,7 +28,6 @@ struct AppFolderTileView: View {
         self.suppressesGroupedOpenedBackdrop = suppressesGroupedOpenedBackdrop
         self._layout = ObservedObject(wrappedValue: DockLayoutService.shared)
         self._preferences = Bindable(wrappedValue: DockyPreferences.shared)
-        self._product = ObservedObject(wrappedValue: ProductService.shared)
         self._store = ObservedObject(wrappedValue: TileStore.shared)
         self._workspace = ObservedObject(wrappedValue: WorkspaceService.shared)
     }
@@ -43,7 +41,7 @@ struct AppFolderTileView: View {
             return store.isInlineAppFolderExpanded(folderID: tile.identifier) ? tile.apps.count : 0
         }
 
-        guard product.isUnlocked(.groupedAppFolders), preferences.showsGroupedOpenedAppsInDock else {
+        guard preferences.showsGroupedOpenedAppsInDock else {
             return 0
         }
 

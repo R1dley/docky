@@ -7,7 +7,6 @@
 
 import ApplicationServices
 import Cocoa
-import Sentry
 
 import Combine
 import Sparkle
@@ -24,12 +23,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var debugStatusItem: NSStatusItem?
     private var debugSnapshotTextView: NSTextView?
     private var debugSnapshotCancellables = Set<AnyCancellable>()
-    private let sessionID = UUID().uuidString.lowercased()
-    private let sessionStartedAt = Date()
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        configureSentry()
-
         // Bound every AX call to 1s so a hung app can't stall the main run loop.
         // Must precede any other AX work — applies process-wide.
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 1.0)
@@ -44,7 +39,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
 
         _ = AppUpdateService.shared
-        _ = ProductService.shared
         _ = LaunchpadHotKeyService.shared
         _ = LaunchpadOverlayService.shared
         AppUpdateService.shared.checkForUpdatesInBackground()
@@ -63,7 +57,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         ProfileTriggerEngine.shared.start()
 
         PermissionsService.shared.refresh()
-        logSessionStart()
 
         if PermissionsService.shared.setupComplete {
             PermissionsService.shared.markInitialOnboardingCompleted()
@@ -250,16 +243,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             return
         }
 
-        guard ProductService.shared.isUnlocked(.externalWidgets) else {
-            presentInstallAlert(
-                title: "Pro required",
-                message: "Installing widgets from the Docky marketplace requires a Pro license.",
-                style: .informational
-            )
-            showSettingsWindow(nil)
-            return
-        }
-
         Task { @MainActor in
             do {
                 let staged = try await MarketplaceClient.shared.downloadBundle(from: downloadURL)
@@ -295,15 +278,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
-        logSessionEnd()
-
         if SystemDockVisibilityService.shared.hasSnapshot {
             SystemDockVisibilityService.shared.restore()
         }
-
-        #if !DEBUG
-        SentrySDK.close()
-        #endif
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
@@ -335,18 +312,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if menuItem.action == #selector(checkForUpdates(_:)) {
             return AppUpdateService.shared.canCheckForUpdates
         }
-
-        #if DEBUG
-        if menuItem.action == #selector(setFreeProductMode(_:)) {
-            menuItem.state = ProductService.shared.currentTier == .free ? .on : .off
-            return true
-        }
-
-        if menuItem.action == #selector(setProProductMode(_:)) {
-            menuItem.state = ProductService.shared.currentTier == .pro ? .on : .off
-            return true
-        }
-        #endif
 
         return true
     }
@@ -423,72 +388,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         #if DEBUG
         installDebugStatusItem()
         #endif
-    }
-
-    private func configureSentry() {
-        #if DEBUG
-        return
-        #else
-        SentrySDK.start { options in
-            options.dsn = "https://5eebd9ca17d595aa7c9cdebc54a0746a@o4511308909510656.ingest.us.sentry.io/4511308910952448"
-            options.sendDefaultPii = false
-            options.enableCrashHandler = false
-            options.enableAutoSessionTracking = false
-            options.enableWatchdogTerminationTracking = false
-            options.enableAppHangTracking = false
-            options.enableNetworkBreadcrumbs = false
-            options.tracesSampleRate = 0
-            options.shutdownTimeInterval = 2
-            options.experimental.enableLogs = true
-            options.beforeSend = { _ in nil }
-            options.beforeSendSpan = { _ in nil }
-            options.beforeSendLog = { log in
-                guard log.attributes["scope"]?.value as? String == "session" else {
-                    return nil
-                }
-
-                return log
-            }
-        }
-        #endif
-    }
-
-    private func logSessionStart() {
-        #if !DEBUG
-        SentrySDK.logger.info("Docky session started", attributes: sessionLogAttributes(phase: "start"))
-        #endif
-    }
-
-    private func logSessionEnd() {
-        #if !DEBUG
-        var attributes = sessionLogAttributes(phase: "end")
-        attributes["session.duration_ms"] = Int(Date().timeIntervalSince(sessionStartedAt) * 1000)
-        SentrySDK.logger.info("Docky session ended", attributes: attributes)
-        #endif
-    }
-
-    private func sessionLogAttributes(phase: String) -> [String: Any] {
-        [
-            "scope": "session",
-            "session.id": sessionID,
-            "session.phase": phase,
-            "app.version": shortVersion,
-            "app.build": buildNumber,
-            "product.tier": ProductService.shared.currentTier.rawValue,
-            "permissions.required_granted": PermissionsService.shared.allRequiredGranted,
-            "permissions.setup_complete": PermissionsService.shared.setupComplete,
-            "permissions.onboarding_completed": PermissionsService.shared.hasCompletedInitialOnboarding,
-            "permissions.missing_required_count": PermissionsService.shared.missingRequiredPermissions.count,
-            "permissions.missing_count": PermissionsService.shared.missingPermissions.count,
-        ]
-    }
-
-    private var shortVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
-    }
-
-    private var buildNumber: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
     }
 
     #if DEBUG
@@ -573,16 +472,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         )
     }
 
-    @objc private func setFreeProductMode(_ sender: Any?) {
-        ProductService.shared.setDebugTier(.free)
-        NSLog("[Docky] Switched debug product tier to Free")
-    }
-
-    @objc private func setProProductMode(_ sender: Any?) {
-        ProductService.shared.setDebugTier(.pro)
-        NSLog("[Docky] Switched debug product tier to Pro")
-    }
-
     private func installDebugStatusItem() {
         guard debugStatusItem == nil else {
             return
@@ -662,32 +551,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         )
         windowPreviewsItem.target = self
 
-        let productModeMenu = NSMenu(title: "Product Mode")
-
-        let freeModeItem = NSMenuItem(
-            title: "Free",
-            action: #selector(setFreeProductMode(_:)),
-            keyEquivalent: ""
-        )
-        freeModeItem.target = self
-
-        let proModeItem = NSMenuItem(
-            title: "Pro",
-            action: #selector(setProProductMode(_:)),
-            keyEquivalent: ""
-        )
-        proModeItem.target = self
-
-        productModeMenu.addItem(freeModeItem)
-        productModeMenu.addItem(proModeItem)
-
-        let productModeItem = NSMenuItem(
-            title: "Product Mode",
-            action: nil,
-            keyEquivalent: ""
-        )
-        productModeItem.submenu = productModeMenu
-
         let settingsItem = NSMenuItem(
             title: "Settings…",
             action: #selector(showSettingsWindow(_:)),
@@ -721,7 +584,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         debugMenu.addItem(showOnboardingItem)
         debugMenu.addItem(overrideSettingsItem)
         debugMenu.addItem(windowPreviewsItem)
-        debugMenu.addItem(productModeItem)
 #if DEBUG
         debugMenu.addItem(makeSimulatedOSVersionMenuItem())
 #endif

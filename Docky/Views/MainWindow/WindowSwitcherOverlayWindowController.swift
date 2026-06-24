@@ -26,8 +26,7 @@ final class WindowSwitcherOverlayWindowController: NSWindowController {
             return true
         }
 
-        guard ProductService.shared.isUnlocked(.windowSwitcher),
-              preferences.showsWindowSwitcherFocusPreview,
+        guard preferences.showsWindowSwitcherFocusPreview,
               preferences.windowSwitcherPreviewMode == .instantFocus else {
             return true
         }
@@ -497,10 +496,6 @@ private struct WindowSwitcherListRow: View {
     }
 
     private func contextActions(modifierFlags: NSEvent.ModifierFlags) -> [ContextAction] {
-        guard ProductService.shared.isUnlocked(.windowSwitcher) else {
-            return []
-        }
-
         let dismiss = { switcher.dismiss() }
         var actions: [ContextAction] = [
             .action(String(localized: "Focus Window")) {
@@ -694,10 +689,6 @@ private struct WindowSwitcherCard: View {
     }
 
     private func contextActions(modifierFlags: NSEvent.ModifierFlags) -> [ContextAction] {
-        guard ProductService.shared.isUnlocked(.windowSwitcher) else {
-            return []
-        }
-
         let dismiss = { switcher.dismiss() }
         var actions: [ContextAction] = [
             .action(String(localized: "Focus Window")) {

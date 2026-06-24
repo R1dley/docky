@@ -26,10 +26,6 @@ final class ActionExecutionService {
 
     @discardableResult
     func perform(action: CatalogActionDefinition, context: CatalogActionContext) async -> Bool {
-        if action.kind != .builtin, !ProductService.shared.isUnlocked(.scriptedActions) {
-            return false
-        }
-
         guard preflightPermissions(for: action) else {
             return false
         }

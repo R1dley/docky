@@ -1,12 +1,8 @@
 import Foundation
-#if !DEBUG
-import Sentry
-#endif
 
 enum DataIntegrityReporter {
     /// Builds a dictionary from `pairs`, keeping the first value for any
-    /// duplicate key. Duplicates are reported via NSLog and (in release builds)
-    /// emitted to Sentry as `error`-level logs scoped to `data-integrity`.
+    /// duplicate key. Duplicates are reported via NSLog.
     static func makeDictionary<Key: Hashable, Value>(
         _ pairs: [(Key, Value)],
         site: String
@@ -34,16 +30,5 @@ enum DataIntegrityReporter {
         NSLog(
             "[Docky] duplicate keys at \(site) count=\(duplicates.count) sample=\(sample)"
         )
-        #if !DEBUG
-        SentrySDK.logger.error(
-            "Duplicate key collision",
-            attributes: [
-                "scope": "data-integrity",
-                "site": site,
-                "count": duplicates.count,
-                "sample": sample.joined(separator: ",")
-            ]
-        )
-        #endif
     }
 }

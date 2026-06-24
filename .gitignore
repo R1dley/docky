@@ -1,6 +1,12 @@
 build/
+DerivedData/
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
 .DS_Store
 
-.sentryclirc
+# Tooling
+.claude/
+
+# Python
+__pycache__/
+*.pyc
