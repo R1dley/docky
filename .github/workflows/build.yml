@@ -1,0 +1,43 @@
+name: Build Docky macOS App
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # Allows you to run this build manually from the browser
+
+jobs:
+  build:
+    # Crucial: Must use macOS to build Xcode projects
+    runs-on: macos-14 
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Select Xcode Version
+      run: |
+        sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+        xcodebuild -version
+
+    - name: Build App
+      run: |
+        xcodebuild -project Docky.xcodeproj \
+                   -scheme Docky \
+                   -configuration Release \
+                   -derivedDataPath build \
+                   CODE_SIGN_IDENTITY="" \
+                   CODE_SIGNING_REQUIRED=NO \
+                   CODE_SIGNING_ALLOWED=NO
+
+    - name: Package App into ZIP
+      run: |
+        cd build/Build/Products/Release
+        zip -r Docky.zip Docky.app
+
+    - name: Upload Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Docky-macOS-Build
+        path: build/Build/Products/Release/Docky.zip
