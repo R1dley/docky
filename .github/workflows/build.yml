@@ -5,20 +5,20 @@ on:
     branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
-  workflow_dispatch: # Allows you to run this build manually from the browser
+  workflow_dispatch:
 
 jobs:
   build:
-    # Crucial: Must use macOS to build Xcode projects
-    runs-on: macos-14 
+    # Downgraded runner slightly to improve compatibility with older project code
+    runs-on: macos-13 
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v4 # This is perfectly fine; warning safely ignored
 
     - name: Select Xcode Version
       run: |
-        sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+        sudo xcode-select -s /Applications/Xcode_14.3.1.app/Contents/Developer
         xcodebuild -version
 
     - name: Build App
@@ -27,10 +27,11 @@ jobs:
                    -scheme Docky \
                    -configuration Release \
                    -derivedDataPath build \
+                   COMPILER_INDEX_STORE_ENABLE=NO \
                    CODE_SIGN_IDENTITY="" \
                    CODE_SIGNING_REQUIRED=NO \
                    CODE_SIGNING_ALLOWED=NO
-
+                   
     - name: Package App into ZIP
       run: |
         cd build/Build/Products/Release
